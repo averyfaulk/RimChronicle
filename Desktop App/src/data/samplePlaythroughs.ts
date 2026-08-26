@@ -444,6 +444,7 @@ const basePlaythroughProject: StoryProject = {
       description: "A mechanoid defoliator ship crashes into the southern ice, releasing psychic poison that kills surrounding pines. Hours later, [[Countess Zephyrine of House Vane]] arrives fleeing imperial bounty hunters.",
       narrativeImpact: "Introduces psycaster powers to [[New Valhalla]], but attracts the hostility of [[The Shattered Stellarch Empire]].",
       intensityScore: 8,
+      tags: ["venomous"],
       involvedFactionIds: ["faction-valhalla", "faction-mechanoids"],
       actions: [
         { label: "Defoliator toxin scoured the sacred pines", tenetKey: "tree-worship" }
@@ -524,17 +525,6 @@ Despite their stark personality contrast—Vex's measured stoicism versus Cole's
 * **[[Rex Sullivan]]**: Close comrade whom she saved from septic shock after the pirate raid.
 * **[[Countess Zephyrine of House Vane]]**: A complex dynamic combining medical duty with aristocratic friction.
 
-## Traits
-* **Iron-Willed** — resistant to mental breaks, even under mortar fire.
-* **Prostophile / Transhumanist** — believes flesh is a temporary liability; joy in augmentation.
-* **Cynical** — dry, clinical bedside manner that hides deep loyalty.
-* **Great Memory** — never forgets a dosage, a debt, or a betrayal.
-
-## Bionics & Health
-* **Bionic Eye (Left)** — [[The Eye of Karas]], grants diagnostic and targeting overlays.
-* **Bionic Spine (Masterwork)** — fabricated in the colony Bio-Fabrication Vault after a compression injury.
-* **Chemical Scar (Right Arm)** — lingering burn tissue from an early luciferium mishandling incident.
-
 ## Equipment & Relics
 * **Primary Relic**: [[The Eye of Karas]]
 * **Sidearm**: Masterwork Charge Rifle (Plasteel frame)
@@ -571,18 +561,7 @@ Cole's marriage to [[Dr. Valerie Vance]] provided him with the first genuine hom
 
 ## Notable Combat Exploits
 * **The Ashen Mortar Counterattack**: Infiltrated the pirate artillery line under cover of a smoke storm, detonating their chemfuel reserves.
-* **The Choke Point Stand**: Fought back-to-back with Aegis for twenty uninterrupted minutes against Hive Unit Kappa-7.
-
-## Traits
-* **Pyromaniac** — finds comfort in controlled flame; catastrophic risk when uncontrolled.
-* **Tough** — shrugs off injuries that would hospitalize anyone else.
-* **Bloodlust** — combat exhilarates rather than terrifies him.
-* **Fast Walker** — closes melee distance before raiders can reload.
-
-## Bionics & Health
-* **Archotech Arm (Right)** — salvaged archotech limb; pairs with [[Dawnbreaker the Persona Monosword]] for impossible parries.
-* **Bionic Heart** — installed by [[Dr. Valerie Vance]] after the Great Cold Snap; never skips under stress.
-* **Psychic Sensitivity** — faintly feels the thrumbo-bond resonance even after Aegis's death.`
+* **The Choke Point Stand**: Fought back-to-back with Aegis for twenty uninterrupted minutes against Hive Unit Kappa-7.`
     },
     {
       id: "art-valhalla",

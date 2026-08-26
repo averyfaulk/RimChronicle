@@ -1,5 +1,8 @@
 import JSZip from "jszip";
 import { StoryProject } from "../types";
+import { getSlotEntries } from "./attributeSlots";
+import { renderStatBlock } from "./statBlock";
+import { resolveSlotConfig } from "./wikiParser";
 
 export async function exportProjectToMarkdownZip(project: StoryProject): Promise<Blob> {
   const zip = new JSZip();
@@ -28,6 +31,24 @@ Generated with RimChronicle Storyteller Studio.
       const safeTitle = art.title.replace(/[/\\?%*:|"<>]/g, "-");
       const categoryDir = wikiFolder.folder(art.category.toLowerCase()) || wikiFolder;
       categoryDir.file(`${safeTitle}.md`, art.markdownContent);
+    });
+  }
+
+  // Characters directory: dossier + dynamic attribute slots + stat block
+  const charactersFolder = zip.folder("characters");
+  if (charactersFolder) {
+    const slots = resolveSlotConfig(project);
+    project.characters.forEach((c) => {
+      const safeName = c.name.replace(/[/\\?%*:|"<>]/g, "-");
+      let md = `# ${c.name}\n*${c.role}${c.faction ? ` — ${c.faction}` : ""}*\n\n${c.bio || ""}\n\n`;
+      if (c.traits?.length) md += `## Traits\n${c.traits.map((t) => `* **${t}**`).join("\n")}\n\n`;
+      slots.forEach((slot) => {
+        const entries = getSlotEntries(c, slot.id);
+        md += `## ${slot.label}\n${entries.length > 0 ? entries.map((e) => `* **${e}**`).join("\n") : "* *(No entries recorded yet.)*"}\n\n`;
+      });
+      md += `${renderStatBlock(c, project)}\n`;
+      if (c.dramaticArc) md += `\n## Dramatic Arc\n${c.dramaticArc}\n`;
+      charactersFolder.file(`${safeName}.md`, md);
     });
   }
 

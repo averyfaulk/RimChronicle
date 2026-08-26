@@ -73,6 +73,7 @@ export const EventMacroModal: React.FC<EventMacroModalProps> = ({
   const [tab, setTab] = useState<"preview" | "source">("preview");
   const [macroActionLabel, setMacroActionLabel] = useState("");
   const [macroTenetKey, setMacroTenetKey] = useState("");
+  const [macroTags, setMacroTags] = useState("");
 
   const accent = accentClasses(template.accent, theme);
 
@@ -155,12 +156,18 @@ export const EventMacroModal: React.FC<EventMacroModalProps> = ({
       }
     }
 
+    const parsedTags = macroTags
+      .split(",")
+      .map((t) => t.trim())
+      .filter(Boolean);
+
     const enrichedEvent: typeof event = {
       ...event,
       ...(derivedInvolvedFactionIds.length > 0
         ? { involvedFactionIds: [...derivedInvolvedFactionIds] }
         : {}),
       ...(actions.length > 0 ? { actions } : {}),
+      ...(parsedTags.length > 0 ? { tags: parsedTags } : {}),
     };
 
     const analysis = applyPreceptAnalysis(project, enrichedEvent);
@@ -458,6 +465,19 @@ export const EventMacroModal: React.FC<EventMacroModalProps> = ({
                 <span>Saved with this action — opposing doctrines will surface a Cultural Friction Point.</span>
               </p>
             )}
+          </div>
+
+          <div>
+            <span className="text-[10px] font-mono opacity-60 uppercase block mb-1">
+              Hazard / Context Tags (optional)
+            </span>
+            <input
+              type="text"
+              value={macroTags}
+              onChange={(e) => setMacroTags(e.target.value)}
+              placeholder='e.g. "venomous", "haunted" — feeds the Plot Doctor'
+              className="w-full px-3 py-1.5 rounded-lg border bg-black/20 outline-none text-xs"
+            />
           </div>
         </div>
 

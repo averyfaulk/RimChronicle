@@ -76,6 +76,37 @@ export type CharacterStatus =
   | "Deceased"
   | "Transhumanist Ascended";
 
+/**
+ * Project-wide attribute slot configuration. Every character shares the same
+ * slot layout; users rename/repurpose slots per mode (e.g. "Bionics" becomes
+ * "Spells / Prepared" in Fantasy/TTRPG mode). Character values live in
+ * Character.slotEntries keyed by slot id, so renaming never loses data.
+ */
+export interface AttributeSlotConfig {
+  id: string; // stable key, e.g. "slot-a" — survives renames & mode switches
+  label: string; // user-visible name
+  /** Set once the user hand-renames a slot; blocks auto-relabel on mode switch. */
+  customLabel?: boolean;
+}
+
+/** Structured numeric fields consumed by the Stat Block Renderer. */
+export interface CombatStats {
+  strength?: number;
+  dexterity?: number;
+  constitution?: number;
+  intelligence?: number;
+  wisdom?: number;
+  charisma?: number;
+  armorClass?: string;
+  hitPoints?: string;
+  speed?: string;
+  initiative?: string;
+  challengeRating?: string;
+  creatureType?: string;
+  senses?: string;
+  languages?: string;
+}
+
 export interface Character {
   id: string;
   name: string;
@@ -85,6 +116,13 @@ export interface Character {
   status: CharacterStatus;
   traits: string[];
   healthConditions: string[];
+  /**
+   * Dynamic attribute slot values keyed by AttributeSlotConfig.id. Migrated
+   * projects split legacy healthConditions into the seeded slots; the flat
+   * healthConditions field remains as a derived mirror of all entries.
+   */
+  slotEntries?: Record<string, string[]>;
+  combatStats?: CombatStats;
   bio: string;
   dramaticArc: string;
   quote?: string;
@@ -347,7 +385,8 @@ export type PlotGapType =
   | "Duplicate Article"
   | "Broken Faction Ref"
   | "Timeline Stagnation"
-  | "Cultural Friction";
+  | "Cultural Friction"
+  | "Hazard Unprepared";
 
 export type PlotGapSeverity = "Critical" | "Warning" | "Opportunity";
 
@@ -387,6 +426,9 @@ export interface StoryProject {
   relationships: CharacterRelationship[];
   storyHierarchy: StoryAct[];
   canonConstraints?: CanonConstraint[];
+  /** Shared attribute slot layout (Bionics/Health/Skills in RimWorld mode,
+   *  Spells/Feats/Saves/Inventory in Fantasy mode — user renameable). */
+  attributeSlots?: AttributeSlotConfig[];
   mapRoutes?: MapRoute[];
   mapSettings?: MapSettings;
   plotGapReport?: PlotGapAnalysisReport;
@@ -474,6 +516,9 @@ export interface TimelineEvent {
   linkedChapterId?: string;
   intensityScore?: number;
   isDowntimeFiller?: boolean;
+  // Free-form hazard/context tags (e.g. "venomous", "haunted") used by the
+  // Plot Doctor's deterministic Hazard Unprepared check.
+  tags?: string[];
   // Precept Matrix integration
   actions?: PreceptAction[];
   involvedFactionIds?: string[];

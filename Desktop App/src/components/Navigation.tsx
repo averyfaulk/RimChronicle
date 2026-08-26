@@ -445,8 +445,8 @@ export const Navigation: React.FC<NavigationProps> = ({
                       ))}
                     </select>
                     <p className="text-[10px] opacity-50 italic mt-1.5 leading-snug">
-                      Swaps UI wording only — saves, links & timelines are untouched.
-                      {lexiconMode === "fantasy" ? ' Colony Dossiers become Character Sheets.' : ""}
+                      Swaps UI wording — saves, links & timelines are untouched.
+                      Attribute slots relabel to the genre preset (rename yours to pin them).
                     </p>
                   </div>
                 </div>

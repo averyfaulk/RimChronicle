@@ -150,7 +150,7 @@ export function getEligibleDowntimeColonists(project: StoryProject): DowntimeCol
       status: c.status,
       traits: c.traits || [],
       healthConditions: c.healthConditions || [],
-      bionics: extractBionics(c),
+      bionics: extractBionics(c, project),
     }));
 }
 

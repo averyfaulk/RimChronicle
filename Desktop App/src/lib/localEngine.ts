@@ -8,23 +8,27 @@
  *    storyteller scenarios (social dilemmas anchored to existing canon — never
  *    game-event claims) with multi-choice resolutions, merged with a user's
  *    custom scenario library via pickLocalPresets(count, project, extra).
- *  - runStaticNarrativeScan: deterministic plot-gap analyzer (11 checks:
+ *  - runStaticNarrativeScan: deterministic plot-gap analyzer (12 checks:
  *    dead links, orphaned articles, loners, missing appearances, pending
  *    drafts, unlinked articles, ghost events, duplicate titles, broken faction
- *    refs, timeline stagnation, cultural friction) plus a cohesion score.
+ *    refs, timeline stagnation, cultural friction, hazard unpreparedness)
+ *    plus a cohesion score.
  */
 
 import {
+  Character,
   CharacterRelationship,
   CrossroadScenario,
   DowntimeColonistProfile,
   DowntimeSnippet,
   EventCategory,
+  PlotGap,
   PlotGapAnalysisReport,
   PlotGapSeverity,
   PlotGapType,
   StoryProject,
   ThreatLevel,
+  TimelineEvent,
   WikiArticle
 } from "../types";
 import { buildEntityLookup, computeArticleBacklinks } from "./wikiParser";
@@ -1630,6 +1634,134 @@ function seededRandom(seed: number): () => number {
  * Blend gap-driven tips (existing behavior) with a stable-but-varying
  * selection from the craft pool, seeded by project identity + scan state.
  */
+/* ------------------------------------------------------------------ */
+/* Hazard Unprepared check (deterministic, AI-free)                    */
+/* ------------------------------------------------------------------ */
+
+const HAZARD_PATTERN =
+  /\b(venom\w*|poison\w*|toxic\w*|plague\w*|miasma|cursed?|acid\w*|infest\w*|diseases?\b|blight\w*|haunted\w*)\b/i;
+
+const HEALING_PATTERN =
+  /\b(heal\w*|cure\w*|potion\w*|medkit\w*|medic\w*|serum\w*|regenerat\w*|salve\w*|elixir\w*|penoxcyline|glitterworld medicine)\b/i;
+
+function eventHazardEvidence(project: StoryProject, event: TimelineEvent): string | null {
+  const tagText = (event.tags || []).join(" ");
+  if (HAZARD_PATTERN.test(tagText)) {
+    return `tagged "${(event.tags || [])
+      .filter((t) => HAZARD_PATTERN.test(t))
+      .join('", "')}"`;
+  }
+
+  const prose = `${event.title} ${event.description}`.toLowerCase();
+  if (HAZARD_PATTERN.test(prose)) {
+    return "hazardous wording in the event record";
+  }
+
+  const location = project.locations.find(
+    (l) => l.name.trim().toLowerCase() === event.location.trim().toLowerCase()
+  );
+  if (location) {
+    if (location.dangerLevel === "Extreme Hazard") {
+      return `"${location.name}" is flagged Extreme Hazard`;
+    }
+    if (HAZARD_PATTERN.test(`${location.biome || ""} ${location.type} ${location.description}`)) {
+      return `located in hazardous "${location.biome || location.type}" terrain`;
+    }
+  }
+  return null;
+}
+
+function characterCanHeal(character: Character): boolean {
+  const corpus = [
+    ...(character.traits || []),
+    ...Object.values(character.slotEntries || {}).flat(),
+  ]
+    .join(" ")
+    .toLowerCase();
+  return HEALING_PATTERN.test(corpus);
+}
+
+/**
+ * Deterministic Plot Doctor check: flags living heroes who walk into a
+ * tagged hazard zone with no healing capability in any attribute slot
+ * (e.g. no healing spells, potions, or medkits), plus a party-level gap
+ * when nobody in the roster can heal at all.
+ */
+export function buildHazardUnpreparedGaps(project: StoryProject): PlotGap[] {
+  const events = project.timelineEvents || [];
+  const slots = project.attributeSlots || [];
+  const inventoryLabel =
+    slots.find((s) => /inventory|equipment|attuned/i.test(s.label))?.label ||
+    slots.find((s) => /spell/i.test(s.label))?.label ||
+    "attribute slots";
+
+  const charByName = new Map<string, Character>();
+  project.characters.forEach((c) => {
+    charByName.set(c.name.trim().toLowerCase(), c);
+    if (c.nickname) charByName.set(c.nickname.trim().toLowerCase(), c);
+  });
+
+  // Latest hazard beat per character so repeat entries don't spam the report.
+  const latestHazardByChar = new Map<string, { event: TimelineEvent; evidence: string }>();
+  events.forEach((event) => {
+    if (event.isDowntimeFiller) return;
+    const evidence = eventHazardEvidence(project, event);
+    if (!evidence) return;
+    (event.participants || []).forEach((name) => {
+      const key = name.trim().toLowerCase();
+      if (!charByName.has(key)) return;
+      const existing = latestHazardByChar.get(key);
+      const parsedNew = parseRimWorldTimestamp(event.timestamp);
+      const parsedOld = existing ? parseRimWorldTimestamp(existing.event.timestamp) : null;
+      if (!existing || (parsedNew && (!parsedOld || parsedNew >= parsedOld))) {
+        latestHazardByChar.set(key, { event, evidence });
+      }
+    });
+  });
+
+  const gaps: PlotGap[] = [];
+  const unhealingParty = new Set<string>();
+
+  latestHazardByChar.forEach(({ event, evidence }, charKey) => {
+    const character = charByName.get(charKey)!;
+    if (character.status === "Deceased") return;
+
+    if (characterCanHeal(character)) return;
+    unhealingParty.add(charKey);
+
+    gaps.push({
+      id: `gap-hazard-${character.id}`,
+      type: "Hazard Unprepared" as PlotGapType,
+      severity: "Warning",
+      title: `${character.name} enters "${event.title}" without healing`,
+      affectedEntities: [character.name, event.location],
+      explanation: `${character.name} has no healing spells or potions in any attribute slot, yet is about to enter a hazardous zone — ${evidence}. One bad poison save away from an unwinnable scene.`,
+      suggestedBridge: `Stock ${character.name}'s "${inventoryLabel}" slot with healing supplies (Potion of Healing, antivenom, a healer's kit), assign a companion who can heal, or lean into the danger deliberately and foreshadow the cost.`,
+      status: "open"
+    });
+  });
+
+  if (unhealingParty.size >= 2) {
+    const names = [...unhealingParty].map((k) => charByName.get(k)!.name);
+    gaps.push({
+      id: "gap-hazard-party-no-healer",
+      type: "Hazard Unprepared" as PlotGapType,
+      severity: "Warning",
+      title: `No Healer In Party: ${names.join(", ")}`,
+      affectedEntities: names,
+      explanation: `${names.length} heroes are heading into hazardous territory (${[...unhealingParty]
+        .map((k) => latestHazardByChar.get(k)!.evidence)
+        .filter((v, i, arr) => arr.indexOf(v) === i)
+        .slice(0, 2)
+        .join("; ")}) and not one of them carries healing capability.`,
+      suggestedBridge: `Introduce a healer NPC, discover a cache of potions, or let the party hire support before the expedition departs.`,
+      status: "open"
+    });
+  }
+
+  return gaps;
+}
+
 function buildNovelizationTips(
   project: StoryProject,
   counts: Record<string, number>,
@@ -1657,6 +1789,8 @@ function buildNovelizationTips(
     tips.push("Reconcile character faction labels with real faction records; allegiance only matters when it's trackable.");
   if ((counts["Timeline Stagnation"] || 0) > 0)
     tips.push("Bridge long silences explicitly — even one line acknowledging the quiet turns dead air into dread or peace.");
+  if ((counts["Hazard Unprepared"] || 0) > 0)
+    tips.push("Unhealed heroes entering hazard tags is a Chekhov's pharmacy — stock the inventory slot or foreshadow the wound.");
 
   const canonicalCount = (project.timelineEvents || []).filter(
     (e) => !e.isDowntimeFiller
@@ -1952,6 +2086,9 @@ export function runStaticNarrativeScan(project: StoryProject): PlotGapAnalysisRe
 
   /* --- 11. Cultural friction (precept matrix clashes) ---------------- */
   gaps.push(...buildCulturalFrictionGaps(project));
+
+  /* --- 12. Hazard Unprepared (healing vs. tagged danger zones) ------ */
+  gaps.push(...buildHazardUnpreparedGaps(project));
 
   /* --- Cohesion score --------------------------------------------- */
   const penalty = gaps.reduce((sum, g) => sum + SEVERITY_WEIGHTS[g.severity], 0);

@@ -12,6 +12,7 @@ import { NovelizationStudio } from "./components/Novel/NovelizationStudio";
 import { ChroniclerBot } from "./components/Archivist/ChroniclerBot";
 import { LogIngestionModal } from "./components/Ingest/LogIngestionModal";
 import { buildEntityLookup, EntityLookup } from "./lib/wikiParser";
+import { applyModePreset, migrateProjectSlots } from "./lib/attributeSlots";
 import { exportProjectToMarkdownZip, downloadBlob } from "./lib/zipExporter";
 import {
   createFreshProject,
@@ -42,7 +43,7 @@ const App: React.FC = () => {
     refreshWikis();
     const lastId = getLastOpenedWikiId();
     const loaded = lastId ? loadWiki(lastId) : null;
-    setProject(loaded ?? getSampleProject());
+    setProject(migrateProjectSlots(loaded ?? getSampleProject()));
     if (loaded) {
       setLastOpenedWikiId(loaded.id);
     }
@@ -55,6 +56,11 @@ const App: React.FC = () => {
   const handleSetLexiconMode = (mode: LexiconMode) => {
     setLexiconMode(mode);
     saveLexiconMode(mode);
+    // Relabel untouched attribute slots to the new mode's preset (Bionics →
+    // Spells / Prepared, ...). Hand-renamed slots keep their labels.
+    if (project) {
+      handleSave(applyModePreset(project, mode));
+    }
   };
 
   const lookup: EntityLookup = useMemo(
@@ -88,7 +94,7 @@ const App: React.FC = () => {
   };
 
   const handleStartFresh = (title: string) => {
-    const fresh = createFreshProject(title);
+    const fresh = migrateProjectSlots(createFreshProject(title));
     setProject(fresh);
     setLastOpenedWikiId(fresh.id);
     setActiveTab("wiki");
@@ -98,7 +104,7 @@ const App: React.FC = () => {
   };
 
   const handleOpenSample = () => {
-    const sample = getSampleProject();
+    const sample = migrateProjectSlots(getSampleProject());
     setProject(sample);
     setLastOpenedWikiId(sample.id);
     setActiveTab("wiki");
@@ -110,7 +116,7 @@ const App: React.FC = () => {
   const handleOpenWiki = (id: string) => {
     const loaded = loadWiki(id);
     if (loaded) {
-      setProject(loaded);
+      setProject(migrateProjectSlots(loaded));
       setLastOpenedWikiId(loaded.id);
       setActiveTab("wiki");
       setSelectedArticleId(undefined);

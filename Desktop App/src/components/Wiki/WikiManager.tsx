@@ -6,6 +6,7 @@ import {
   Plus,
   Edit3,
   Eye,
+  Pencil,
   Sparkles,
   Download,
   Trash2,
@@ -27,11 +28,13 @@ import { useLexicon } from "../../lib/lexicon";
 import {
   EntityLookup,
   computeArticleBacklinks,
-  buildCharacterDossierSections,
-  ensureCharacterArticleSections,
-  findCharacterByTitle
+  sanitizeCharacterArticleSections,
+  findCharacterByTitle,
+  resolveSlotConfig
 } from "../../lib/wikiParser";
 import { MarkdownRenderer } from "./MarkdownRenderer";
+import { CharacterSheetPanel } from "../Characters/CharacterSheetPanel";
+import { CharacterEditModal } from "../Characters/CharacterEditModal";
 import { downloadBlob } from "../../lib/zipExporter";
 
 interface WikiManagerProps {
@@ -68,6 +71,9 @@ export const WikiManager: React.FC<WikiManagerProps> = ({
   const [aiPromptInstruction, setAiPromptInstruction] = useState("");
   const [isExpanding, setIsExpanding] = useState(false);
   const [aiExpandError, setAiExpandError] = useState("");
+
+  // Character sheet editor (shared CharacterEditModal) for the linked dossier
+  const [isSheetEditorOpen, setIsSheetEditorOpen] = useState(false);
 
   // Create article modal state
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -119,6 +125,12 @@ export const WikiManager: React.FC<WikiManagerProps> = ({
     return backlinksMap.get(currentArticle.title.toLowerCase()) || [];
   }, [currentArticle, backlinksMap]);
 
+  // Character dossier linked to this article (Characters category + title match).
+  const linkedCharacter = useMemo(() => {
+    if (!currentArticle || currentArticle.category !== "Characters") return undefined;
+    return findCharacterByTitle(project.characters, currentArticle.title);
+  }, [currentArticle, project.characters]);
+
   const handleSelectArticle = (art: WikiArticle) => {
     setSelectedArticleId(art.id);
     setIsEditing(false);
@@ -136,12 +148,12 @@ export const WikiManager: React.FC<WikiManagerProps> = ({
   const handleSaveEdit = () => {
     if (!currentArticle) return;
 
-    const matchedCharacter =
-      editedCategory === "Characters"
-        ? findCharacterByTitle(project.characters, editedTitle)
-        : undefined;
-    // Every character entry must carry Traits and Bionics & Health sections
-    const finalContent = ensureCharacterArticleSections(editedContent, matchedCharacter);
+    // Traits & attribute slots render live in the Dossier card — strip any
+    // stale static copies from character articles on every save.
+    const finalContent = sanitizeCharacterArticleSections(
+      editedContent,
+      resolveSlotConfig(project)
+    );
     const words = finalContent.trim().split(/\s+/).filter(Boolean).length;
     const tagArray = editedTags
       .split(",")
@@ -176,14 +188,11 @@ export const WikiManager: React.FC<WikiManagerProps> = ({
 
     const id = `art-${Date.now()}`;
     const isCharacterArticle = newCategory === "Characters";
-    const matchedCharacter = isCharacterArticle
-      ? findCharacterByTitle(project.characters, newTitle)
-      : undefined;
 
+    // Character articles stay prose-only: traits & attribute slots render
+    // live in the Dossier card above the article.
     const initialContent = isCharacterArticle
-      ? `# ${newTitle}\n\n## Overview\nAdd background lore, chronicle references, and [[WikiLinks]] here.\n\n${buildCharacterDossierSections(
-          matchedCharacter
-        )}\n\n## Key Events\n* Mention key dates or colony exploits.`
+      ? `# ${newTitle}\n\n## Overview\nAdd background lore, chronicle references, and [[WikiLinks]] here.\n\n## Key Events\n* Mention key dates or colony exploits.`
       : `# ${newTitle}\n\n## Overview\nAdd background lore, traits, chronicle references, and [[WikiLinks]] here.\n\n## Key Events\n* Mention key dates or colony exploits.`;
     const newArticle: WikiArticle = {
       id,
@@ -593,6 +602,46 @@ export const WikiManager: React.FC<WikiManagerProps> = ({
               </div>
             )}
 
+            {/* Linked Character Sheet: Traits + Attribute Slots + Stat Block */}
+            {!isEditing && linkedCharacter && (
+              <div
+                className={`rounded-2xl border p-4 space-y-3 ${
+                  theme === "dark"
+                    ? "bg-[#0c0c0e] border-[#25252d]"
+                    : theme === "parchment"
+                    ? "bg-amber-100/50 border-amber-300"
+                    : "bg-slate-950/60 border-cyan-900"
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <h3 className="font-serif font-bold text-sm flex items-center gap-1.5">
+                    <User className="w-4 h-4 text-blue-400" />
+                    {lex.t("dossierWord")} — {linkedCharacter.role || lex.t("defaultRole")}
+                  </h3>
+                  <div className="flex items-center gap-2">
+                    <button
+                      id="btn-wiki-edit-character-sheet"
+                      onClick={() => setIsSheetEditorOpen(true)}
+                      className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold border border-white/15 opacity-80 hover:opacity-100 transition-opacity"
+                      title="Edit this character sheet — identity, status, traits & attribute slots"
+                    >
+                      <Pencil className="w-3 h-3" />
+                      Edit Sheet
+                    </button>
+                    <span className="text-[10px] font-mono opacity-40 uppercase">
+                      live-linked to the Social Web
+                    </span>
+                  </div>
+                </div>
+                <CharacterSheetPanel
+                  character={linkedCharacter}
+                  project={project}
+                  setProject={setProject}
+                  theme={theme}
+                />
+              </div>
+            )}
+
             {/* Article Content or Markdown Editor */}
             {isEditing ? (
               <div className="space-y-4">
@@ -893,6 +942,18 @@ export const WikiManager: React.FC<WikiManagerProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Character Sheet Editor (linked dossier) */}
+      {isSheetEditorOpen && linkedCharacter && (
+        <CharacterEditModal
+          project={project}
+          setProject={setProject}
+          theme={theme}
+          mode="edit"
+          character={linkedCharacter}
+          onClose={() => setIsSheetEditorOpen(false)}
+        />
       )}
     </div>
   );

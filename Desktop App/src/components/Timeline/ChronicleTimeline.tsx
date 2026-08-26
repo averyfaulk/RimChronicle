@@ -142,6 +142,7 @@ export const ChronicleTimeline: React.FC<ChronicleTimelineProps> = ({
   const [newParticipants, setNewParticipants] = useState("");
   const [newDescription, setNewDescription] = useState("");
   const [newImpact, setNewImpact] = useState("");
+  const [newEventTags, setNewEventTags] = useState("");
   const [newIntensity, setNewIntensity] = useState(7);
   const [newInvolvedFactionIds, setNewInvolvedFactionIds] = useState<string[]>([]);
   const [newActions, setNewActions] = useState<PreceptAction[]>([]);
@@ -652,6 +653,7 @@ export const ChronicleTimeline: React.FC<ChronicleTimelineProps> = ({
       intensityScore: newIntensity,
       ...(newInvolvedFactionIds.length > 0 ? { involvedFactionIds: [...newInvolvedFactionIds] } : {}),
       ...(newActions.length > 0 ? { actions: [...newActions] } : {}),
+      ...(parseEventTags(newEventTags).length > 0 ? { tags: parseEventTags(newEventTags) } : {}),
     };
 
     const analysis = applyPreceptAnalysis(project, newEvt);
@@ -666,10 +668,18 @@ export const ChronicleTimeline: React.FC<ChronicleTimelineProps> = ({
     setNewTitle("");
     setNewDescription("");
     setNewImpact("");
+    setNewEventTags("");
     setNewInvolvedFactionIds([]);
     setNewActions([]);
     setNewActionLabel("");
   };
+
+  /** Comma-separated tag text → clean lowercase-free tag list. */
+  const parseEventTags = (text: string): string[] =>
+    text
+      .split(",")
+      .map((t) => t.trim())
+      .filter(Boolean);
 
   const getCategoryIcon = (category: EventCategory) => {
     switch (category) {
@@ -1275,6 +1285,23 @@ export const ChronicleTimeline: React.FC<ChronicleTimelineProps> = ({
                   placeholder="Dr. Valerie Vance, Cole Briggs, Hive Kappa-7"
                   className="w-full px-3 py-1.5 rounded-lg border bg-black/20 outline-none"
                 />
+              </div>
+
+              <div>
+                <label className="font-mono opacity-70 block mb-1">
+                  Hazard / Context Tags (comma separated)
+                </label>
+                <input
+                  type="text"
+                  value={newEventTags}
+                  onChange={(e) => setNewEventTags(e.target.value)}
+                  placeholder='e.g. "venomous", "haunted", "blizzard" — feeds the Plot Doctor'
+                  className="w-full px-3 py-1.5 rounded-lg border bg-black/20 outline-none"
+                />
+                <p className="text-[10px] opacity-50 mt-1 italic">
+                  Tag danger zones ("venomous", "toxic"...) and the offline Plot Doctor will warn about
+                  heroes entering them without healing spells or potions.
+                </p>
               </div>
 
               {project.factions.length > 0 && (

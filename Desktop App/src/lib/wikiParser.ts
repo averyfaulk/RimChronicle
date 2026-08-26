@@ -1,4 +1,4 @@
-import { WikiArticle, Character, Faction, LocationItem, RelicItem, StoryProject } from "../types";
+import { WikiArticle, Character, Faction, LocationItem, RelicItem, StoryProject, AttributeSlotConfig } from "../types";
 
 export interface EntityLookup {
   characters: Map<string, Character>;
@@ -8,7 +8,7 @@ export interface EntityLookup {
   articles: Map<string, WikiArticle>;
 }
 
-const BIONIC_KEYWORDS = [
+export const BIONIC_KEYWORDS = [
   "bionic",
   "archotech",
   "prosthetic",
@@ -22,80 +22,90 @@ const BIONIC_KEYWORDS = [
 ];
 
 /** Pull prosthetic / augmentation items out of a character's health conditions. */
-export function extractBionics(character: Character): string[] {
+export function extractLegacyBionics(character: Character): string[] {
   return (character.healthConditions || []).filter((hc) =>
     BIONIC_KEYWORDS.some((kw) => hc.toLowerCase().includes(kw))
   );
 }
 
 /**
- * Canonical markdown body for the mandatory character dossier sections:
- * every character entry must carry "## Traits" and "## Bionics & Health".
+ * Back-compat bionics lookup.
+ *
+ * When a project is supplied, entries come from the character's dynamic
+ * attribute slots — but only while the seeded bionics slot still carries a
+ * bionic-flavored label (repurposing it into e.g. "Spells / Prepared" yields
+ * no bionics). Without a project, falls back to legacy keyword extraction
+ * over healthConditions so old call sites keep working untouched.
  */
-export function buildCharacterDossierSections(character?: Character): string {
-  const traits = character?.traits || [];
-  const health = character?.healthConditions || [];
-  const bionics = health.filter((hc) =>
-    BIONIC_KEYWORDS.some((kw) => hc.toLowerCase().includes(kw))
-  );
-  const otherConditions = health.filter(
-    (hc) => !BIONIC_KEYWORDS.some((kw) => hc.toLowerCase().includes(kw))
-  );
+export function extractBionics(character: Character, project?: StoryProject): string[] {
+  if (project) {
+    const slots = resolveSlotConfig(project);
+    const slot = slots.find((s) => s.id === BIONICS_SLOT_ID);
+    if (slot && /bionic/i.test(slot.label)) {
+      return character.slotEntries?.[slot.id] || [];
+    }
+    // Slot repurposed: check whether any other slot kept a bionic label.
+    const alt = slots.find((s) => /bionic/i.test(s.label));
+    if (alt) return character.slotEntries?.[alt.id] || [];
+    return [];
+  }
+  return extractLegacyBionics(character);
+}
 
-  const traitsSection = `## Traits\n${
-    traits.length > 0 ? traits.map((t) => `* **${t}**`).join("\n") : "* *(No recorded traits yet.)*"
-  }`;
+/** Project slot layout with a guaranteed fallback for unmigrated projects. */
+export function resolveSlotConfig(project?: StoryProject | null): AttributeSlotConfig[] {
+  if (project?.attributeSlots && project.attributeSlots.length > 0) {
+    return project.attributeSlots;
+  }
+  return DEFAULT_SLOT_CONFIG;
+}
 
-  const bionicsLines = [
-    ...bionics.map((b) => `* **${b}**`),
-    ...otherConditions.map((h) => `* ${h}`),
-  ];
+export const BIONICS_SLOT_ID = "slot-a";
+export const HEALTH_SLOT_ID = "slot-b";
+export const SKILLS_SLOT_ID = "slot-c";
 
-  const bionicsSection = `## Bionics & Health\n${
-    bionicsLines.length > 0
-      ? bionicsLines.join("\n")
-      : "* *(No prosthetics, augmentations, or medical conditions on record.)*"
-  }`;
+const DEFAULT_SLOT_CONFIG: AttributeSlotConfig[] = [
+  { id: BIONICS_SLOT_ID, label: "Bionics" },
+  { id: HEALTH_SLOT_ID, label: "Health Conditions" },
+  { id: SKILLS_SLOT_ID, label: "Skills" },
+];
 
-  return `${traitsSection}\n\n${bionicsSection}`;
+function normalizeHeader(text: string): string {
+  return text.toLowerCase().replace(/[^a-z0-9]+/g, "");
 }
 
 /**
- * Ensure a character article's markdown contains the mandatory
- * "## Traits" and "## Bionics & Health" sections, appending any that are missing.
+ * Strip the duplicated dossier blocks ("## Traits", one section per
+ * configured attribute slot, and legacy "## Bionics & Health") from a
+ * character article's markdown. This data now renders live in the Dossier
+ * card on Characters pages, so keeping static copies in prose would drift.
+ * Idempotent; only level-2 headings are matched, and each removed section
+ * consumes everything up to the next level-1/2 heading (subsections go with it).
  */
-export function ensureCharacterArticleSections(
+export function sanitizeCharacterArticleSections(
   markdownContent: string,
-  character?: Character
+  slots?: AttributeSlotConfig[]
 ): string {
-  const hasTraits = /^##\s+Traits\b/im.test(markdownContent);
-  const hasBionics = /^##\s+Bionics(&|\s)/im.test(markdownContent);
+  const stripped = new Set([normalizeHeader("Traits"), normalizeHeader("Bionics & Health")]);
+  (slots || []).forEach((slot) => stripped.add(normalizeHeader(slot.label)));
 
-  if (hasTraits && hasBionics) return markdownContent;
+  const lines = markdownContent.split("\n");
+  const out: string[] = [];
+  let skipping = false;
 
-  let updated = markdownContent;
-
-  if (!hasTraits) {
-    const traitsBlock =
-      character && character.traits.length > 0
-        ? `## Traits\n${character.traits.map((t) => `* **${t}**`).join("\n")}`
-        : "## Traits\n* *(Trait record pending archivist review.)*";
-    updated += `\n\n${traitsBlock}`;
+  for (const line of lines) {
+    const h2 = line.match(/^##\s+(.+?)\s*$/);
+    if (h2) {
+      skipping = stripped.has(normalizeHeader(h2[1]));
+      if (skipping) continue;
+    } else if (skipping && /^#{1,2}\s+/.test(line)) {
+      // A deeper heading can't end a level-2 section, but guard anyway.
+      skipping = false;
+    }
+    if (!skipping) out.push(line);
   }
 
-  if (!hasBionics) {
-    const health = character?.healthConditions || [];
-    const bionicLines = health.filter((hc) =>
-      BIONIC_KEYWORDS.some((kw) => hc.toLowerCase().includes(kw))
-    );
-    const bionicsBlock =
-      bionicLines.length > 0
-        ? `## Bionics & Health\n${bionicLines.map((b) => `* **${b}**`).join("\n")}`
-        : "## Bionics & Health\n* *(No bionics or medical conditions on record.)*";
-    updated += `\n\n${bionicsBlock}`;
-  }
-
-  return updated.trimEnd() + "\n";
+  return out.join("\n").replace(/\n{3,}/g, "\n\n").trimEnd() + "\n";
 }
 
 /** Find a Character record by exact name or nickname match (case-insensitive). */

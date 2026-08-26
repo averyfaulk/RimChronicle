@@ -26,15 +26,13 @@ import {
   FactionStance,
   RelationshipType,
   ThemeMode,
-  StoryProject,
-  WikiArticle
+  StoryProject
 } from "../../types";
 import { selectClasses } from "../../lib/uiTheme";
 import { useLexicon } from "../../lib/lexicon";
-import {
-  buildCharacterDossierSections,
-  ensureCharacterArticleSections
-} from "../../lib/wikiParser";
+import { CharacterSheetPanel } from "../Characters/CharacterSheetPanel";
+import { CharacterEditModal } from "../Characters/CharacterEditModal";
+import { SlotsManagerModal } from "../Characters/SlotsManagerModal";
 
 interface RelationshipGraphProps {
   project: StoryProject;
@@ -58,39 +56,6 @@ interface NodePosition {
   color: string;
 }
 
-interface ColonistFormState {
-  name: string;
-  nickname: string;
-  role: string;
-  faction: string;
-  status: CharacterStatus;
-  traitsText: string;
-  healthText: string;
-  dramaticArc: string;
-  bio: string;
-}
-
-const EMPTY_COLONIST_FORM: ColonistFormState = {
-  name: "",
-  nickname: "",
-  role: "Colonist",
-  faction: "",
-  status: "Active",
-  traitsText: "",
-  healthText: "",
-  dramaticArc: "",
-  bio: "",
-};
-
-const CHARACTER_STATUSES: CharacterStatus[] = [
-  "Active",
-  "Injured",
-  "In Mental Break",
-  "Missing",
-  "Deceased",
-  "Transhumanist Ascended",
-];
-
 const FACTION_STANCES: FactionStance[] = ["Allied", "Hostile", "Neutral", "Player Colony"];
 
 interface FactionFormState {
@@ -112,13 +77,6 @@ const EMPTY_FACTION_FORM: FactionFormState = {
   description: "",
   settlementLocation: "",
 };
-
-function parseListField(text: string): string[] {
-  return text
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
 
 export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
   project,
@@ -142,11 +100,14 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
   const [relOpinion, setRelOpinion] = useState<number>(50);
   const [relNotes, setRelNotes] = useState("");
 
-  // Colonist (character) CRUD form state
-  const [isColonistModalOpen, setIsColonistModalOpen] = useState(false);
-  const [colonistModalMode, setColonistModalMode] = useState<"add" | "edit">("add");
-  const [colonistForm, setColonistForm] = useState<ColonistFormState>(EMPTY_COLONIST_FORM);
-  const [editingCharacterId, setEditingCharacterId] = useState<string | null>(null);
+  // Colonist (character) sheet editor — shared CharacterEditModal
+  const [sheetEditor, setSheetEditor] = useState<{
+    mode: "add" | "edit";
+    character: Character | null;
+  } | null>(null);
+
+  // Attribute slots manager
+  const [isSlotsManagerOpen, setIsSlotsManagerOpen] = useState(false);
 
   // Faction manager modal state
   const [isFactionModalOpen, setIsFactionModalOpen] = useState(false);
@@ -339,140 +300,21 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
   };
 
   /* ---------------------------------------------------------------- */
-  /* Manual Colonist CRUD                                             */
+  /* Manual Colonist CRUD (shared CharacterEditModal)                 */
   /* ---------------------------------------------------------------- */
 
   const openAddColonistModal = () => {
-    setColonistModalMode("add");
-    setEditingCharacterId(null);
-    setColonistForm({ ...EMPTY_COLONIST_FORM, role: lex.t("defaultRole"), faction: project.factions[0]?.name || "" });
-    setIsColonistModalOpen(true);
+    setSheetEditor({ mode: "add", character: null });
   };
 
   const openEditColonistModal = (char: Character) => {
-    setColonistModalMode("edit");
-    setEditingCharacterId(char.id);
-    setColonistForm({
-      name: char.name,
-      nickname: char.nickname,
-      role: char.role,
-      faction: char.faction,
-      status: char.status,
-      traitsText: (char.traits || []).join(", "),
-      healthText: (char.healthConditions || []).join(", "),
-      dramaticArc: char.dramaticArc || "",
-      bio: char.bio || "",
-    });
-    setIsColonistModalOpen(true);
+    setSheetEditor({ mode: "edit", character: char });
   };
 
-  const handleSaveColonist = () => {
-    const name = colonistForm.name.trim();
-    if (!name) return;
-
-    const nickname = colonistForm.nickname.trim() || name;
-    const today = new Date().toISOString().split("T")[0];
-
-    if (colonistModalMode === "add") {
-      // Create the character record...
-      const newChar: Character = {
-        id: `char-${Date.now()}`,
-        name,
-        nickname,
-        role: colonistForm.role.trim() || lex.t("defaultRole"),
-        faction: colonistForm.faction,
-        status: colonistForm.status,
-        traits: parseListField(colonistForm.traitsText),
-        healthConditions: parseListField(colonistForm.healthText),
-        bio: colonistForm.bio.trim(),
-        dramaticArc: colonistForm.dramaticArc.trim(),
-      };
-
-      // ...and automatically initialize a matching Characters wiki article.
-      const articleContent = `# ${name}\n\n## Overview\n${
-        newChar.bio || "*Entity referenced in chronicle records.*"
-      }\n\n${buildCharacterDossierSections(newChar)}\n\n## Key Events\n* *(Awaiting chronicle detail)*`;
-
-      const newArticle: WikiArticle = {
-        id: `art-${Date.now()}`,
-        title: name,
-        category: "Characters",
-        tags: ["characters", "colonist"],
-        markdownContent: articleContent,
-        createdAt: today,
-        lastModified: today,
-        wordCount: articleContent.split(/\s+/).filter(Boolean).length,
-      };
-
-      setProject({
-        ...project,
-        characters: [newChar, ...project.characters],
-        wikiArticles: [newArticle, ...project.wikiArticles],
-        lastUpdated: new Date().toISOString(),
-      });
-      setSelectedCharacterId(newChar.id);
-
-      if (!relSource) setRelSource(newChar.name);
-      if (!relTarget) setRelTarget(project.characters[0]?.name || "");
-    } else if (editingCharacterId) {
-      const original = project.characters.find((c) => c.id === editingCharacterId);
-      if (!original) return;
-
-      const updatedChar: Character = {
-        ...original,
-        name,
-        nickname,
-        role: colonistForm.role.trim() || original.role,
-        faction: colonistForm.faction,
-        status: colonistForm.status,
-        traits: parseListField(colonistForm.traitsText),
-        healthConditions: parseListField(colonistForm.healthText),
-        bio: colonistForm.bio.trim(),
-        dramaticArc: colonistForm.dramaticArc.trim(),
-      };
-
-      // If renamed, keep relationship references and wiki titles in sync.
-      const oldNames = [original.name.toLowerCase(), (original.nickname || "").toLowerCase()].filter(
-        Boolean
-      );
-      const renamed =
-        original.name.toLowerCase() !== name.toLowerCase();
-
-      let relationships = project.relationships;
-      if (renamed) {
-        relationships = relationships.map((rel) => ({
-          ...rel,
-          source: oldNames.includes(rel.source.toLowerCase()) ? name : rel.source,
-          target: oldNames.includes(rel.target.toLowerCase()) ? name : rel.target,
-        }));
-      }
-
-      let wikiArticles = project.wikiArticles;
-      if (renamed) {
-        wikiArticles = wikiArticles.map((a) =>
-          a.title.toLowerCase() === original.name.toLowerCase() ? { ...a, title: name } : a
-        );
-      }
-      // Keep mandatory dossier sections present on the linked article.
-      wikiArticles = wikiArticles.map((a) =>
-        a.title.toLowerCase() === name.toLowerCase() && a.category === "Characters"
-          ? {
-              ...a,
-              markdownContent: ensureCharacterArticleSections(a.markdownContent, updatedChar),
-            }
-          : a
-      );
-
-      setProject({
-        ...project,
-        characters: project.characters.map((c) => (c.id === editingCharacterId ? updatedChar : c)),
-        relationships,
-        wikiArticles,
-        lastUpdated: new Date().toISOString(),
-      });
-    }
-
-    setIsColonistModalOpen(false);
+  const handleSheetSaved = (saved: Character) => {
+    setSelectedCharacterId(saved.id);
+    if (!relSource) setRelSource(saved.name);
+    if (!relTarget) setRelTarget(project.characters[0]?.name || "");
   };
 
   const handleDeleteColonist = (char: Character) => {
@@ -967,44 +809,14 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
               </div>
             </div>
 
-            {/* Traits */}
-            {selectedCharacter.traits && (
-              <div>
-                <span className="text-[11px] font-mono opacity-60 uppercase block mb-1">
-                  Personality Traits:
-                </span>
-                <div className="flex flex-wrap gap-1.5">
-                  {selectedCharacter.traits.map((t) => (
-                    <span
-                      key={t}
-                      className="px-2 py-0.5 rounded-md text-[11px] font-mono bg-white/10 border border-white/5 font-semibold"
-                    >
-                      {t}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Health / Bionics */}
-            {selectedCharacter.healthConditions && (
-              <div>
-                <span className="text-[11px] font-mono opacity-60 uppercase block mb-1">
-                  {lex.t("healthScarsBionics")}:
-                </span>
-                <div className="space-y-1">
-                  {selectedCharacter.healthConditions.map((h, i) => (
-                    <div
-                      key={i}
-                      className="text-xs p-1.5 rounded-lg bg-black/20 border border-white/5 flex items-center justify-between"
-                    >
-                      <span>{h}</span>
-                      <Zap className="w-3 h-3 text-cyan-400 shrink-0" />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+            {/* Character Sheet: Traits + Attribute Slots + Stat Block */}
+            <CharacterSheetPanel
+              character={selectedCharacter}
+              project={project}
+              setProject={setProject}
+              theme={theme}
+              onManageSlots={() => setIsSlotsManagerOpen(true)}
+            />
 
             {/* Dramatic Arc */}
             {selectedCharacter.dramaticArc && (
@@ -1235,180 +1047,18 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
           </div>
         </div>
       )}
-      {/* Add / Edit Colonist Modal */}
-      {isColonistModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div
-            className={`w-full max-w-lg max-h-[92vh] overflow-y-auto p-6 rounded-2xl border shadow-2xl space-y-4 ${
-              theme === "dark"
-                ? "bg-[#121215] border-[#25252e] text-[#e2e8f0]"
-                : theme === "parchment"
-                ? "bg-amber-50 border-amber-300 text-stone-900"
-                : "bg-slate-900 border-cyan-800 text-cyan-50"
-            }`}
-          >
-            <div className="flex justify-between items-center pb-2 border-b border-white/10">
-              <h3 className="font-serif font-bold text-base flex items-center space-x-2">
-                <UserPlus className="w-4 h-4 text-amber-500" />
-                <span>
-                  {colonistModalMode === "add" ? lex.t("addColonist") : `Edit ${lex.t("dossierWord")}: ${colonistForm.name || lex.t("colonistSingular")}`}
-                </span>
-              </h3>
-              <button
-                onClick={() => setIsColonistModalOpen(false)}
-                className="text-xs opacity-60 hover:opacity-100"
-              >
-                ✕
-              </button>
-            </div>
-
-            <p className="text-[11px] opacity-70 leading-relaxed">
-              {colonistModalMode === "add"
-                ? "Creates the colonist record and automatically initializes a matching Characters wiki article you can flesh out later."
-                : "Changes apply to the Social Web immediately; relationship bonds follow any name change automatically."}
-            </p>
-
-            <div className="space-y-3 text-xs">
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="font-mono opacity-70 block mb-1">Name *</label>
-                  <input
-                    type="text"
-                    value={colonistForm.name}
-                    onChange={(e) => setColonistForm({ ...colonistForm, name: e.target.value })}
-                    placeholder="e.g. Dr. Valerie Vance"
-                    className="w-full px-3 py-1.5 rounded-lg border bg-black/20 outline-none text-sm font-semibold"
-                    autoFocus
-                  />
-                </div>
-                <div>
-                  <label className="font-mono opacity-70 block mb-1">Nickname</label>
-                  <input
-                    type="text"
-                    value={colonistForm.nickname}
-                    onChange={(e) => setColonistForm({ ...colonistForm, nickname: e.target.value })}
-                    placeholder="e.g. Vex"
-                    className="w-full px-3 py-1.5 rounded-lg border bg-black/20 outline-none"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="font-mono opacity-70 block mb-1">Role / Title</label>
-                  <input
-                    type="text"
-                    value={colonistForm.role}
-                    onChange={(e) => setColonistForm({ ...colonistForm, role: e.target.value })}
-                    placeholder="e.g. Colony Surgeon"
-                    className="w-full px-3 py-1.5 rounded-lg border bg-black/20 outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="font-mono opacity-70 block mb-1">{lex.t("factionSingular")}</label>
-                  <select
-                    value={colonistForm.faction}
-                    onChange={(e) => setColonistForm({ ...colonistForm, faction: e.target.value })}
-                    className={`w-full px-2 py-1.5 rounded-lg outline-none text-xs cursor-pointer ${selectClasses(theme)}`}
-                  >
-                    <option value="">{lex.t("noFaction")}</option>
-                    {project.factions.map((f) => (
-                      <option key={f.id} value={f.name}>
-                        {f.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="font-mono opacity-70 block mb-1">Status</label>
-                  <select
-                    value={colonistForm.status}
-                    onChange={(e) =>
-                      setColonistForm({ ...colonistForm, status: e.target.value as CharacterStatus })
-                    }
-                    className={`w-full px-2 py-1.5 rounded-lg outline-none text-xs cursor-pointer ${selectClasses(theme)}`}
-                  >
-                    {CHARACTER_STATUSES.map((s) => (
-                      <option key={s} value={s}>
-                        {lex.status(s)}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="font-mono opacity-70 block mb-1">Traits (comma separated)</label>
-                  <input
-                    type="text"
-                    value={colonistForm.traitsText}
-                    onChange={(e) => setColonistForm({ ...colonistForm, traitsText: e.target.value })}
-                    placeholder="Iron-willed, Bloodlust, Night Owl"
-                    className="w-full px-3 py-1.5 rounded-lg border bg-black/20 outline-none"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="font-mono opacity-70 block mb-1">
-                  {lex.t("healthScarsBionics")} (comma separated)
-                </label>
-                <input
-                  type="text"
-                  value={colonistForm.healthText}
-                  onChange={(e) => setColonistForm({ ...colonistForm, healthText: e.target.value })}
-                  placeholder={lex.t("healthPlaceholder")}
-                  className="w-full px-3 py-1.5 rounded-lg border bg-black/20 outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="font-mono opacity-70 block mb-1">Dramatic Arc / Inner Conflict</label>
-                <textarea
-                  rows={2}
-                  value={colonistForm.dramaticArc}
-                  onChange={(e) => setColonistForm({ ...colonistForm, dramaticArc: e.target.value })}
-                  placeholder="e.g. Fears losing control again; seeks redemption for Gorgon's broken ribs."
-                  className="w-full px-3 py-1.5 rounded-lg border bg-black/20 outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="font-mono opacity-70 block mb-1">Bio / Background</label>
-                <textarea
-                  rows={3}
-                  value={colonistForm.bio}
-                  onChange={(e) => setColonistForm({ ...colonistForm, bio: e.target.value })}
-                  placeholder="Where they came from, why they crashed here, what they left behind..."
-                  className="w-full px-3 py-1.5 rounded-lg border bg-black/20 outline-none"
-                />
-              </div>
-            </div>
-
-            <div className="flex justify-end space-x-2 pt-2">
-              <button
-                onClick={() => setIsColonistModalOpen(false)}
-                className="px-3 py-1.5 rounded-lg text-xs border border-white/10 opacity-80 hover:opacity-100"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSaveColonist}
-                disabled={!colonistForm.name.trim()}
-                className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-transform active:scale-95 disabled:opacity-40 ${
-                  theme === "dark"
-                    ? "bg-amber-500 text-slate-950 hover:bg-amber-400"
-                    : theme === "parchment"
-                    ? "bg-amber-800 text-amber-50 hover:bg-amber-700"
-                    : "bg-cyan-500 text-slate-950 hover:bg-cyan-400"
-                }`}
-              >
-                {colonistModalMode === "add" ? lex.t("createColonist") : `Save ${lex.t("dossierWord")}`}
-              </button>
-            </div>
-          </div>
-        </div>
+      {/* Add / Edit Character Sheet (shared CharacterEditModal) */}
+      {sheetEditor && (
+        <CharacterEditModal
+          project={project}
+          setProject={setProject}
+          theme={theme}
+          mode={sheetEditor.mode}
+          character={sheetEditor.character}
+          onClose={() => setSheetEditor(null)}
+          onSaved={handleSheetSaved}
+          onManageSlots={() => setIsSlotsManagerOpen(true)}
+        />
       )}
 
       {/* Manage Factions Modal */}
@@ -1618,6 +1268,17 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Attribute Slots Manager */}
+      {isSlotsManagerOpen && (
+        <SlotsManagerModal
+          project={project}
+          setProject={setProject}
+          theme={theme}
+          lexiconMode={lex.mode}
+          onClose={() => setIsSlotsManagerOpen(false)}
+        />
       )}
     </div>
   );
