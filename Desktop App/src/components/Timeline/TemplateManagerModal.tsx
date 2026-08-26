@@ -30,6 +30,7 @@ import {
   upsertCustomTemplate,
 } from "../../lib/templateStore";
 import { downloadBlob } from "../../lib/zipExporter";
+import { selectClasses } from "../../lib/uiTheme";
 import { accentClasses, TEMPLATE_ICON_KEYS, TemplateIcon } from "./TemplateIcon";
 
 interface TemplateManagerModalProps {
@@ -265,7 +266,7 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
               <select
                 value={field.type}
                 onChange={(e) => updateField(field.id, { type: e.target.value as TemplateFieldType })}
-                className={inputCls}
+                className={`w-full px-2 py-1.5 rounded-lg outline-none text-xs cursor-pointer ${selectClasses(theme)}`}
               >
                 {FIELD_TYPES.map((t) => (
                   <option key={t.value} value={t.value}>
@@ -561,7 +562,7 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
                   <select
                     value={draft.icon}
                     onChange={(e) => patchDraft({ icon: e.target.value })}
-                    className={inputCls}
+                    className={`w-full px-2 py-1.5 rounded-lg outline-none text-xs cursor-pointer ${selectClasses(theme)}`}
                   >
                     {TEMPLATE_ICON_KEYS.map((k) => (
                       <option key={k} value={k}>
@@ -575,7 +576,7 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
                   <select
                     value={draft.accent}
                     onChange={(e) => patchDraft({ accent: e.target.value })}
-                    className={inputCls}
+                    className={`w-full px-2 py-1.5 rounded-lg outline-none text-xs cursor-pointer ${selectClasses(theme)}`}
                   >
                     {ACCENTS.map((a) => (
                       <option key={a} value={a}>
@@ -589,7 +590,7 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
                   <select
                     value={draft.category}
                     onChange={(e) => patchDraft({ category: e.target.value as EventCategory })}
-                    className={inputCls}
+                    className={`w-full px-2 py-1.5 rounded-lg outline-none text-xs cursor-pointer ${selectClasses(theme)}`}
                   >
                     {CATEGORIES.map((c) => (
                       <option key={c} value={c}>
@@ -603,7 +604,7 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
                   <select
                     value={draft.threatLevel}
                     onChange={(e) => patchDraft({ threatLevel: e.target.value as ThreatLevel })}
-                    className={inputCls}
+                    className={`w-full px-2 py-1.5 rounded-lg outline-none text-xs cursor-pointer ${selectClasses(theme)}`}
                   >
                     {THREAT_LEVELS.map((t) => (
                       <option key={t} value={t}>

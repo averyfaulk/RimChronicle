@@ -75,6 +75,7 @@ import { loadCustomScenarios } from "../../lib/scenarioStore";
 import { ScenarioLibraryModal } from "./ScenarioLibraryModal";
 import { WifiOff } from "lucide-react";
 import { BUILTIN_TENETS, applyInferredAnalysis, applyPreceptAnalysis } from "../../lib/preceptEngine";
+import { selectClasses } from "../../lib/uiTheme";
 
 interface ChronicleTimelineProps {
   project: StoryProject;
@@ -809,7 +810,7 @@ export const ChronicleTimeline: React.FC<ChronicleTimelineProps> = ({
             <select
               value={selectedCategory}
               onChange={(e) => setSelectedCategory(e.target.value)}
-              className="w-full px-2.5 py-1.5 rounded-lg border bg-black/20 outline-none text-xs"
+              className={`w-full px-2.5 py-1.5 rounded-lg outline-none text-xs cursor-pointer ${selectClasses(theme)}`}
             >
               <option value="All">All Categories</option>
               {categories.map((c) => (
@@ -825,7 +826,7 @@ export const ChronicleTimeline: React.FC<ChronicleTimelineProps> = ({
             <select
               value={selectedThreat}
               onChange={(e) => setSelectedThreat(e.target.value)}
-              className="w-full px-2.5 py-1.5 rounded-lg border bg-black/20 outline-none text-xs"
+              className={`w-full px-2.5 py-1.5 rounded-lg outline-none text-xs cursor-pointer ${selectClasses(theme)}`}
             >
               <option value="All">All Threat Levels</option>
               <option value="Minor">Minor</option>
@@ -840,7 +841,7 @@ export const ChronicleTimeline: React.FC<ChronicleTimelineProps> = ({
             <select
               value={selectedParticipant}
               onChange={(e) => setSelectedParticipant(e.target.value)}
-              className="w-full px-2.5 py-1.5 rounded-lg border bg-black/20 outline-none text-xs"
+              className={`w-full px-2.5 py-1.5 rounded-lg outline-none text-xs cursor-pointer ${selectClasses(theme)}`}
             >
               <option value="All">All Colonists</option>
               {project.characters.map((c) => (
@@ -1217,7 +1218,7 @@ export const ChronicleTimeline: React.FC<ChronicleTimelineProps> = ({
                   <select
                     value={newCategory}
                     onChange={(e) => setNewCategory(e.target.value as EventCategory)}
-                    className="w-full px-2 py-1.5 rounded-lg border bg-black/20 outline-none"
+                    className={`w-full px-2 py-1.5 rounded-lg outline-none cursor-pointer ${selectClasses(theme)}`}
                   >
                     {categories.map((c) => (
                       <option key={c} value={c}>
@@ -1231,7 +1232,7 @@ export const ChronicleTimeline: React.FC<ChronicleTimelineProps> = ({
                   <select
                     value={newThreat}
                     onChange={(e) => setNewThreat(e.target.value as ThreatLevel)}
-                    className="w-full px-2 py-1.5 rounded-lg border bg-black/20 outline-none"
+                    className={`w-full px-2 py-1.5 rounded-lg outline-none cursor-pointer ${selectClasses(theme)}`}
                   >
                     <option value="Minor">Minor</option>
                     <option value="Moderate">Moderate</option>
@@ -1476,7 +1477,7 @@ export const ChronicleTimeline: React.FC<ChronicleTimelineProps> = ({
                   <select
                     value={diceFrequency}
                     onChange={(e) => setDiceFrequency(e.target.value as DowntimeFrequency)}
-                    className="w-full px-2 py-1.5 rounded-lg border bg-black/20 outline-none"
+                    className={`w-full px-2 py-1.5 rounded-lg outline-none cursor-pointer ${selectClasses(theme)}`}
                   >
                     {Object.entries(DOWNTIME_FREQUENCIES).map(([key, freq]) => (
                       <option key={key} value={key}>
@@ -1894,7 +1895,7 @@ export const ChronicleTimeline: React.FC<ChronicleTimelineProps> = ({
                       <select
                         value={crossroadsDraft.timelineEvent.category}
                         onChange={(e) => patchDraftEvent({ category: e.target.value as EventCategory })}
-                        className="w-full px-2 py-1.5 rounded-lg border bg-black/20 outline-none"
+                        className={`w-full px-2 py-1.5 rounded-lg outline-none cursor-pointer ${selectClasses(theme)}`}
                       >
                         {categories.map((c) => (
                           <option key={c} value={c}>
@@ -1909,7 +1910,7 @@ export const ChronicleTimeline: React.FC<ChronicleTimelineProps> = ({
                       <select
                         value={crossroadsDraft.timelineEvent.threatLevel}
                         onChange={(e) => patchDraftEvent({ threatLevel: e.target.value as ThreatLevel })}
-                        className="w-full px-2 py-1.5 rounded-lg border bg-black/20 outline-none"
+                        className={`w-full px-2 py-1.5 rounded-lg outline-none cursor-pointer ${selectClasses(theme)}`}
                       >
                         <option value="Minor">Minor</option>
                         <option value="Moderate">Moderate</option>

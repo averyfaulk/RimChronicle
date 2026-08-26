@@ -23,6 +23,7 @@ import {
 import { MarkdownRenderer } from "../Wiki/MarkdownRenderer";
 import { accentClasses, TemplateIcon } from "./TemplateIcon";
 import { BUILTIN_TENETS, applyPreceptAnalysis } from "../../lib/preceptEngine";
+import { selectClasses } from "../../lib/uiTheme";
 
 interface EventMacroModalProps {
   template: EventTemplate;
@@ -187,7 +188,7 @@ export const EventMacroModal: React.FC<EventMacroModalProps> = ({
         <select
           value={typeof value === "string" ? value : ""}
           onChange={(e) => setField(field.id, e.target.value)}
-          className="w-full px-2 py-1.5 rounded-lg border bg-black/20 outline-none text-xs"
+          className={`w-full px-2 py-1.5 rounded-lg outline-none text-xs cursor-pointer ${selectClasses(theme)}`}
         >
           <option value="">— Select Colonist —</option>
           {project.characters.map((c) => (
@@ -233,7 +234,7 @@ export const EventMacroModal: React.FC<EventMacroModalProps> = ({
         <select
           value={typeof value === "string" ? value : ""}
           onChange={(e) => setField(field.id, e.target.value)}
-          className="w-full px-2 py-1.5 rounded-lg border bg-black/20 outline-none text-xs"
+          className={`w-full px-2 py-1.5 rounded-lg outline-none text-xs cursor-pointer ${selectClasses(theme)}`}
         >
           <option value="">— Select Faction —</option>
           {project.factions.map((f) => (
@@ -250,7 +251,7 @@ export const EventMacroModal: React.FC<EventMacroModalProps> = ({
         <select
           value={typeof value === "string" ? value : ""}
           onChange={(e) => setField(field.id, e.target.value)}
-          className="w-full px-2 py-1.5 rounded-lg border bg-black/20 outline-none text-xs"
+          className={`w-full px-2 py-1.5 rounded-lg outline-none text-xs cursor-pointer ${selectClasses(theme)}`}
         >
           <option value="">— Select Location —</option>
           {project.locations.map((l) => (

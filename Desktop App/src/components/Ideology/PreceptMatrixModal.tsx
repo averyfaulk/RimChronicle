@@ -8,6 +8,7 @@ import {
   ThemeMode,
 } from "../../types";
 import { BUILTIN_TENETS } from "../../lib/preceptEngine";
+import { selectClasses } from "../../lib/uiTheme";
 
 interface PreceptMatrixModalProps {
   project: StoryProject;
@@ -250,7 +251,7 @@ export const PreceptMatrixModal: React.FC<PreceptMatrixModalProps> = ({
             <select
               value={newCustomCategory}
               onChange={(e) => setNewCustomCategory(e.target.value as PreceptCategory)}
-              className="px-2 py-1.5 rounded-lg border bg-black/20 outline-none text-xs"
+              className={`px-2 py-1.5 rounded-lg outline-none text-xs cursor-pointer ${selectClasses(theme)}`}
             >
               {CATEGORIES.map((c) => (
                 <option key={c} value={c}>

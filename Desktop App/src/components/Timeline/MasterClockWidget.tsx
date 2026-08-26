@@ -10,6 +10,7 @@ import {
   parseRimWorldTimestamp,
   setMasterClock,
 } from "../../lib/downtime";
+import { selectClasses } from "../../lib/uiTheme";
 
 interface MasterClockWidgetProps {
   project: StoryProject;
@@ -102,7 +103,7 @@ export const MasterClockWidget: React.FC<MasterClockWidgetProps> = ({
               <select
                 value={day}
                 onChange={(e) => setDay(parseInt(e.target.value))}
-                className="w-full px-1.5 py-1 rounded border bg-black/20 outline-none text-xs"
+                className={`w-full px-1.5 py-1 rounded outline-none text-xs cursor-pointer ${selectClasses(theme)}`}
               >
                 {Array.from({ length: DAYS_PER_QUADRUM }, (_, i) => i + 1).map((d) => (
                   <option key={d} value={d}>
@@ -116,7 +117,7 @@ export const MasterClockWidget: React.FC<MasterClockWidgetProps> = ({
               <select
                 value={quadrum}
                 onChange={(e) => setQuadrum(parseInt(e.target.value))}
-                className="w-full px-1.5 py-1 rounded border bg-black/20 outline-none text-xs"
+                className={`w-full px-1.5 py-1 rounded outline-none text-xs cursor-pointer ${selectClasses(theme)}`}
               >
                 {QUADRUMS.map((q, i) => (
                   <option key={q} value={i}>

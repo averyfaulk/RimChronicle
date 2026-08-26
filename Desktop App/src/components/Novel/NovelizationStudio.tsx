@@ -28,6 +28,7 @@ import {
   ThemeMode,
   StoryProject
 } from "../../types";
+import { selectClasses } from "../../lib/uiTheme";
 import { EntityLookup } from "../../lib/wikiParser";
 import { MarkdownRenderer } from "../Wiki/MarkdownRenderer";
 import { downloadBlob } from "../../lib/zipExporter";
@@ -649,7 +650,7 @@ export const NovelizationStudio: React.FC<NovelizationStudioProps> = ({
                 <select
                   value={stylePreset}
                   onChange={(e) => setStylePreset(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border bg-black/20 outline-none"
+                  className={`w-full px-3 py-2 rounded-xl outline-none cursor-pointer ${selectClasses(theme)}`}
                 >
                   <option value="Grimdark Sci-Fi (Atmospheric, gritty, visceral survival)">
                     Grimdark Sci-Fi (Dan Abnett style - visceral, tactical grit, intense)
@@ -671,7 +672,7 @@ export const NovelizationStudio: React.FC<NovelizationStudioProps> = ({
                 <select
                   value={pointOfView}
                   onChange={(e) => setPointOfView(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border bg-black/20 outline-none"
+                  className={`w-full px-3 py-2 rounded-xl outline-none cursor-pointer ${selectClasses(theme)}`}
                 >
                   <option value="Third Person Limited (focusing on Dr. Valerie Vance)">
                     Third Person Limited (Vex's perspective)
@@ -693,7 +694,7 @@ export const NovelizationStudio: React.FC<NovelizationStudioProps> = ({
                 <select
                   value={wordCountTarget}
                   onChange={(e) => setWordCountTarget(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border bg-black/20 outline-none"
+                  className={`w-full px-3 py-2 rounded-xl outline-none cursor-pointer ${selectClasses(theme)}`}
                 >
                   <option value="600-900 words (Crisp vignette)">600-900 words (Crisp vignette)</option>
                   <option value="1000-1500 words (Full chapter)">1000-1500 words (Standard full chapter)</option>

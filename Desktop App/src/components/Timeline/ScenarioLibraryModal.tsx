@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { EventCategory, ThemeMode, ThreatLevel } from "../../types";
 import { LocalCrossroadPreset } from "../../lib/localEngine";
+import { selectClasses } from "../../lib/uiTheme";
 import {
   deleteCustomScenario,
   loadCustomScenarios,
@@ -525,7 +526,7 @@ export const ScenarioLibraryModal: React.FC<ScenarioLibraryModalProps> = ({
                         onChange={(e) =>
                           updateResolution(idx, { category: e.target.value as EventCategory })
                         }
-                        className={`px-2.5 py-1.5 rounded-lg text-xs border outline-none ${inputCls}`}
+                        className={`px-2.5 py-1.5 rounded-lg text-xs outline-none cursor-pointer ${selectClasses(theme)}`}
                         title="Event category"
                       >
                         {CATEGORIES.map((c) => (
@@ -539,7 +540,7 @@ export const ScenarioLibraryModal: React.FC<ScenarioLibraryModalProps> = ({
                         onChange={(e) =>
                           updateResolution(idx, { threatLevel: e.target.value as ThreatLevel })
                         }
-                        className={`px-2.5 py-1.5 rounded-lg text-xs border outline-none ${inputCls}`}
+                        className={`px-2.5 py-1.5 rounded-lg text-xs outline-none cursor-pointer ${selectClasses(theme)}`}
                         title="Threat level (Minor/Moderate recommended)"
                       >
                         {THREAT_LEVELS.map((t) => (

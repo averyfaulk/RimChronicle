@@ -29,6 +29,7 @@ import {
   StoryProject,
   WikiArticle
 } from "../../types";
+import { selectClasses } from "../../lib/uiTheme";
 import {
   buildCharacterDossierSections,
   ensureCharacterArticleSections
@@ -610,7 +611,7 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
               <select
                 value={filterType}
                 onChange={(e) => setFilterType(e.target.value)}
-                className="px-2 py-1 rounded-lg border text-xs bg-black/20 outline-none font-medium"
+                className={`px-2 py-1 rounded-lg outline-none text-xs font-medium cursor-pointer ${selectClasses(theme)}`}
               >
                 <option value="All">All Bonds</option>
                 <option value="Romance">Romance & Spouse</option>
@@ -1131,7 +1132,7 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
                   <select
                     value={relSource}
                     onChange={(e) => setRelSource(e.target.value)}
-                    className="w-full px-2.5 py-1.5 rounded-lg border text-xs bg-black/20 outline-none"
+                    className={`w-full px-2.5 py-1.5 rounded-lg outline-none text-xs cursor-pointer ${selectClasses(theme)}`}
                   >
                     {project.characters.map((c) => (
                       <option key={c.id} value={c.name}>
@@ -1145,7 +1146,7 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
                   <select
                     value={relTarget}
                     onChange={(e) => setRelTarget(e.target.value)}
-                    className="w-full px-2.5 py-1.5 rounded-lg border text-xs bg-black/20 outline-none"
+                    className={`w-full px-2.5 py-1.5 rounded-lg outline-none text-xs cursor-pointer ${selectClasses(theme)}`}
                   >
                     {project.characters.map((c) => (
                       <option key={c.id} value={c.name}>
@@ -1162,7 +1163,7 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
                   <select
                     value={relType}
                     onChange={(e) => setRelType(e.target.value as RelationshipType)}
-                    className="w-full px-2.5 py-1.5 rounded-lg border text-xs bg-black/20 outline-none"
+                    className={`w-full px-2.5 py-1.5 rounded-lg outline-none text-xs cursor-pointer ${selectClasses(theme)}`}
                   >
                     <option value="Romance">Romance</option>
                     <option value="Spouse">Spouse / Marriage</option>
@@ -1306,7 +1307,7 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
                   <select
                     value={colonistForm.faction}
                     onChange={(e) => setColonistForm({ ...colonistForm, faction: e.target.value })}
-                    className="w-full px-2 py-1.5 rounded-lg border bg-black/20 outline-none"
+                    className={`w-full px-2 py-1.5 rounded-lg outline-none text-xs cursor-pointer ${selectClasses(theme)}`}
                   >
                     <option value="">— No Faction —</option>
                     {project.factions.map((f) => (
@@ -1326,7 +1327,7 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
                     onChange={(e) =>
                       setColonistForm({ ...colonistForm, status: e.target.value as CharacterStatus })
                     }
-                    className="w-full px-2 py-1.5 rounded-lg border bg-black/20 outline-none"
+                    className={`w-full px-2 py-1.5 rounded-lg outline-none text-xs cursor-pointer ${selectClasses(theme)}`}
                   >
                     {CHARACTER_STATUSES.map((s) => (
                       <option key={s} value={s}>
@@ -1532,7 +1533,7 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
                     onChange={(e) =>
                       setFactionForm({ ...factionForm, stance: e.target.value as FactionStance })
                     }
-                    className="w-full px-2 py-1.5 rounded-lg border bg-black/20 outline-none"
+                    className={`w-full px-2 py-1.5 rounded-lg outline-none text-xs cursor-pointer ${selectClasses(theme)}`}
                   >
                     {FACTION_STANCES.map((s) => (
                       <option key={s} value={s}>

@@ -22,6 +22,7 @@ import {
   Check
 } from "lucide-react";
 import { WikiArticle, ArticleCategory, ThemeMode, StoryProject } from "../../types";
+import { selectClasses } from "../../lib/uiTheme";
 import {
   EntityLookup,
   computeArticleBacklinks,
@@ -608,7 +609,7 @@ export const WikiManager: React.FC<WikiManagerProps> = ({
                     <select
                       value={editedCategory}
                       onChange={(e) => setEditedCategory(e.target.value as ArticleCategory)}
-                      className="w-full px-3 py-1.5 rounded-lg border text-sm bg-black/20 outline-none"
+                      className={`w-full px-3 py-1.5 rounded-lg outline-none text-sm cursor-pointer ${selectClasses(theme)}`}
                     >
                       <option value="Characters">Characters</option>
                       <option value="Factions">Factions</option>
@@ -748,7 +749,7 @@ export const WikiManager: React.FC<WikiManagerProps> = ({
                 <select
                   value={newCategory}
                   onChange={(e) => setNewCategory(e.target.value as ArticleCategory)}
-                  className="w-full px-3 py-2 rounded-xl border text-sm bg-black/20 outline-none"
+                  className={`w-full px-3 py-2 rounded-xl outline-none text-sm cursor-pointer ${selectClasses(theme)}`}
                 >
                   <option value="Characters">Characters (Colonists, Enemies, Nobles)</option>
                   <option value="Factions">Factions (Settlements, Cartels, Tribes)</option>

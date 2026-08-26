@@ -173,10 +173,10 @@ export const AIModelPicker: React.FC<AIModelPickerProps> = ({ theme }) => {
           onChange={(e) => handleProviderChange(e.target.value)}
           className={`text-[11px] font-mono font-bold rounded outline-none cursor-pointer max-w-[92px] ${
             theme === "dark"
-              ? "bg-[#121216] text-amber-400"
+              ? "bg-[#121216] text-amber-400 [color-scheme:dark] [&>option]:bg-[#121216] [&>option]:text-amber-300"
               : theme === "parchment"
-              ? "bg-amber-100 text-amber-900"
-              : "bg-slate-900 text-cyan-300"
+              ? "bg-amber-100 text-amber-900 [color-scheme:light] [&>option]:bg-amber-50 [&>option]:text-amber-900"
+              : "bg-slate-900 text-cyan-300 [color-scheme:dark] [&>option]:bg-slate-900 [&>option]:text-cyan-200"
           }`}
           title={providers.find((p) => p.id === provider)?.description || "OpenCode gateway"}
         >
@@ -196,10 +196,10 @@ export const AIModelPicker: React.FC<AIModelPickerProps> = ({ theme }) => {
           disabled={loadingModels}
           className={`text-[11px] font-mono rounded outline-none cursor-pointer max-w-[130px] sm:max-w-[180px] truncate ${
             theme === "dark"
-              ? "bg-[#121216] text-zinc-300"
+              ? "bg-[#121216] text-zinc-300 [color-scheme:dark] [&>option]:bg-[#121216] [&>option]:text-zinc-300"
               : theme === "parchment"
-              ? "bg-amber-100 text-stone-700"
-              : "bg-slate-900 text-cyan-100"
+              ? "bg-amber-100 text-stone-700 [color-scheme:light] [&>option]:bg-amber-50 [&>option]:text-stone-700"
+              : "bg-slate-900 text-cyan-100 [color-scheme:dark] [&>option]:bg-slate-900 [&>option]:text-cyan-100"
           }`}
           title={model ? `Active model: ${model}` : "Active model"}
         >
