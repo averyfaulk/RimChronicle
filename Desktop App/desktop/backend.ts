@@ -562,13 +562,30 @@ async function handleNovelizeChapter(body: any): Promise<AiResponse> {
     customStyleInstructions,
     pointOfView,
     wordCountTarget,
+    canonConstraints,
   } = body || {};
+
+  const canonLaws = Array.isArray(canonConstraints)
+    ? (canonConstraints as Array<{ title?: string; ruleStatement?: string }>)
+        .filter((c) => c && c.ruleStatement)
+        .map((c, i) => `${i + 1}. [${(c.title || "Canon Law").trim()}] ${c.ruleStatement.trim()}`)
+        .join("\n")
+    : "";
+
+  const canonSection = canonLaws
+    ? `
+ABSOLUTE CANON LAWS — hard world rules you must NEVER violate in the prose:
+${canonLaws}
+If the plot seems to require breaking a law, invent a grounded, clever workaround instead
+(e.g. a network of relay stations instead of FTL comms). Never mention these rules explicitly.
+`
+    : "";
 
   const prompt = `
 You are a bestselling novelist adapting procedural gameplay logs into a literary masterpiece.
 
 Write a full, immersive chapter titled "${chapterTitle}" (part of "${actTitle || "Act I"}").
-
+${canonSection}
 Target Style Preset: ${stylePreset || "Grimdark Sci-Fi (Atmospheric, gritty, intense)"}
 Custom Style Notes: ${customStyleInstructions || "Emphasize psychological dread, harsh survival, tactical grit, and warm moments of humanity."}
 Point of View: ${pointOfView || "Third Person Limited (focusing on key colonist)"}

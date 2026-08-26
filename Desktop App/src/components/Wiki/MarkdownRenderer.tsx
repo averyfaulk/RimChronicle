@@ -1,8 +1,9 @@
 import React from "react";
 import ReactMarkdown from "react-markdown";
-import { ThemeMode } from "../../types";
+import { CanonConstraint, ThemeMode } from "../../types";
 import { EntityLookup } from "../../lib/wikiParser";
 import { WikiHoverCard } from "./WikiHoverCard";
+import { extractCanonHighlightSpans } from "../../lib/canonEngine";
 
 interface MarkdownRendererProps {
   content: string;
@@ -10,7 +11,13 @@ interface MarkdownRendererProps {
   theme: ThemeMode;
   onNavigateToArticle: (title: string) => void;
   className?: string;
+  canonConstraints?: CanonConstraint[];
 }
+
+const canonSpanClasses = (theme: ThemeMode) =>
+  theme === "parchment"
+    ? "bg-red-800/15 text-red-900 rounded-sm px-0.5 underline decoration-red-700/60 decoration-wavy cursor-help"
+    : "bg-red-500/20 text-red-300 rounded-sm px-0.5 border-b border-red-400/70 cursor-help";
 
 export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
   content,
@@ -18,12 +25,43 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
   theme,
   onNavigateToArticle,
   className = "",
+  canonConstraints,
 }) => {
+  // Wrap sentences breaching active canon laws in a warning span (offsets are
+  // local to each text node, so the scanner can run per-segment).
+  const decorateCanonViolations = (text: string): React.ReactNode => {
+    if (!canonConstraints || canonConstraints.length === 0) return text;
+    const spans = extractCanonHighlightSpans(text, canonConstraints);
+    if (spans.length === 0) return text;
+
+    const nodes: React.ReactNode[] = [];
+    let lastIdx = 0;
+    spans.forEach((span, i) => {
+      if (span.start > lastIdx) {
+        nodes.push(text.substring(lastIdx, span.start));
+      }
+      nodes.push(
+        <span
+          key={`canon-violation-${i}-${span.start}`}
+          className={canonSpanClasses(theme)}
+          title={`⚠️ Constraint Violation: ${span.message}`}
+        >
+          {text.substring(span.start, span.end)}
+        </span>
+      );
+      lastIdx = span.end;
+    });
+    if (lastIdx < text.length) {
+      nodes.push(text.substring(lastIdx));
+    }
+    return nodes;
+  };
+
   // Pre-process text to replace [[WikiLink]] with a token we can custom-render
   const renderTextWithWikiLinks = (text: string) => {
     if (typeof text !== "string") return text;
 
-    const parts = [];
+    const parts: React.ReactNode[] = [];
     const regex = /\[\[(.*?)\]\]/g;
     let lastIdx = 0;
     let match;
@@ -33,7 +71,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
       const linkText = match[1];
 
       if (start > lastIdx) {
-        parts.push(text.substring(lastIdx, start));
+        parts.push(decorateCanonViolations(text.substring(lastIdx, start)));
       }
 
       parts.push(
@@ -52,7 +90,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
     }
 
     if (lastIdx < text.length) {
-      parts.push(text.substring(lastIdx));
+      parts.push(decorateCanonViolations(text.substring(lastIdx)));
     }
 
     return parts.length > 0 ? parts : text;

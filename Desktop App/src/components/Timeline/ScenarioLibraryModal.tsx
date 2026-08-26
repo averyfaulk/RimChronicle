@@ -12,6 +12,7 @@ import {
 import { EventCategory, ThemeMode, ThreatLevel } from "../../types";
 import { LocalCrossroadPreset } from "../../lib/localEngine";
 import { selectClasses } from "../../lib/uiTheme";
+import { useLexicon } from "../../lib/lexicon";
 import {
   deleteCustomScenario,
   loadCustomScenarios,
@@ -87,6 +88,7 @@ export const ScenarioLibraryModal: React.FC<ScenarioLibraryModalProps> = ({
   onClose,
   onSaved,
 }) => {
+  const lex = useLexicon();
   const [scenarios, setScenarios] = useState<LocalCrossroadPreset[]>(() =>
     loadCustomScenarios()
   );
@@ -531,7 +533,7 @@ export const ScenarioLibraryModal: React.FC<ScenarioLibraryModalProps> = ({
                       >
                         {CATEGORIES.map((c) => (
                           <option key={c} value={c}>
-                            {c}
+                            {lex.evCat(c)}
                           </option>
                         ))}
                       </select>

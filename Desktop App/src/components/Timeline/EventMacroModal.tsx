@@ -24,6 +24,7 @@ import { MarkdownRenderer } from "../Wiki/MarkdownRenderer";
 import { accentClasses, TemplateIcon } from "./TemplateIcon";
 import { BUILTIN_TENETS, applyPreceptAnalysis } from "../../lib/preceptEngine";
 import { selectClasses } from "../../lib/uiTheme";
+import { useLexicon } from "../../lib/lexicon";
 
 interface EventMacroModalProps {
   template: EventTemplate;
@@ -63,6 +64,7 @@ export const EventMacroModal: React.FC<EventMacroModalProps> = ({
   masterDate,
   onClose,
 }) => {
+  const lex = useLexicon();
   const [values, setValues] = useState<TemplateValues>(() => defaultValues(template));
   const [dateInput, setDateInput] = useState<string>(
     masterDate ? formatRimWorldDate(masterDate) : ""
@@ -339,7 +341,7 @@ export const EventMacroModal: React.FC<EventMacroModalProps> = ({
         <div className="flex justify-between items-center pb-2 border-b border-white/10">
           <h3 className="font-serif font-bold text-base flex items-center space-x-2">
             <TemplateIcon icon={template.icon} className="w-4 h-4" />
-            <span className={accent.text}>Record: {template.name}</span>
+            <span className={accent.text}>Record: {lex.tplName(template)}</span>
           </h3>
           <button
             onClick={onClose}
@@ -463,7 +465,7 @@ export const EventMacroModal: React.FC<EventMacroModalProps> = ({
         {preview && (
           <div className="flex flex-wrap gap-1.5 text-[10px] font-mono">
             <span className="px-2 py-0.5 rounded bg-blue-500/15 text-blue-300 border border-blue-500/30">
-              {preview.event.category}
+              {lex.evCat(preview.event.category)}
             </span>
             <span
               className={`px-2 py-0.5 rounded border ${

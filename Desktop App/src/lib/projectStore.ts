@@ -125,6 +125,7 @@ export function createFreshProject(title: string): StoryProject {
     relics: [],
     relationships: [],
     storyHierarchy: [],
+    canonConstraints: [],
     preceptMatrices: [],
     culturalFrictionPoints: [],
     lastUpdated: new Date().toISOString(),

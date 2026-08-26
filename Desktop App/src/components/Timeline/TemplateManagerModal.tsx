@@ -32,6 +32,7 @@ import {
 import { downloadBlob } from "../../lib/zipExporter";
 import { selectClasses } from "../../lib/uiTheme";
 import { accentClasses, TEMPLATE_ICON_KEYS, TemplateIcon } from "./TemplateIcon";
+import { useLexicon } from "../../lib/lexicon";
 
 interface TemplateManagerModalProps {
   theme: ThemeMode;
@@ -103,6 +104,7 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
   onClose,
   onSaved,
 }) => {
+  const lex = useLexicon();
   const [templates, setTemplates] = useState<EventTemplate[]>(() => loadCustomTemplates());
   const [mode, setMode] = useState<"list" | "edit">("list");
   const [draft, setDraft] = useState<EventTemplate | null>(null);
@@ -270,7 +272,13 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
               >
                 {FIELD_TYPES.map((t) => (
                   <option key={t.value} value={t.value}>
-                    {t.label}
+                    {t.value === "colonist"
+                      ? `${lex.t("colonistSingular")} (dropdown)`
+                      : t.value === "colonist-multi"
+                      ? `${lex.t("colonistsPlural")} (multi-select)`
+                      : t.value === "faction"
+                      ? `${lex.t("factionSingular")} (dropdown)`
+                      : t.label}
                   </option>
                 ))}
               </select>
@@ -420,13 +428,13 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
           <TemplateIcon icon={tpl.icon} className={`w-4 h-4 shrink-0 ${accent.text}`} />
           <div className="min-w-0">
             <span className="text-xs font-bold block truncate">
-              {tpl.name}
+              {lex.tplName(tpl)}
               {isBuiltIn && (
                 <span className="ml-1 text-[9px] uppercase font-mono opacity-40 bg-white/10 px-1 py-0.2 rounded">built-in</span>
               )}
             </span>
             <span className="text-[10px] font-mono opacity-50">
-              {tpl.category} · {tpl.threatLevel} · {tpl.fields.length} fields
+              {lex.evCat(tpl.category)} · {tpl.threatLevel} · {tpl.fields.length} fields
             </span>
           </div>
         </div>
@@ -594,7 +602,7 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
                   >
                     {CATEGORIES.map((c) => (
                       <option key={c} value={c}>
-                        {c}
+                        {lex.evCat(c)}
                       </option>
                     ))}
                   </select>

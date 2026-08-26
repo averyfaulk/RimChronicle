@@ -30,6 +30,7 @@ import {
   WikiArticle
 } from "../../types";
 import { selectClasses } from "../../lib/uiTheme";
+import { useLexicon } from "../../lib/lexicon";
 import {
   buildCharacterDossierSections,
   ensureCharacterArticleSections
@@ -125,6 +126,7 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
   theme,
   onNavigateToArticle,
 }) => {
+  const lex = useLexicon();
   const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 700, height: 500 });
   const [selectedCharacterId, setSelectedCharacterId] = useState<string | null>(
@@ -343,7 +345,7 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
   const openAddColonistModal = () => {
     setColonistModalMode("add");
     setEditingCharacterId(null);
-    setColonistForm({ ...EMPTY_COLONIST_FORM, faction: project.factions[0]?.name || "" });
+    setColonistForm({ ...EMPTY_COLONIST_FORM, role: lex.t("defaultRole"), faction: project.factions[0]?.name || "" });
     setIsColonistModalOpen(true);
   };
 
@@ -377,7 +379,7 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
         id: `char-${Date.now()}`,
         name,
         nickname,
-        role: colonistForm.role.trim() || "Colonist",
+        role: colonistForm.role.trim() || lex.t("defaultRole"),
         faction: colonistForm.faction,
         status: colonistForm.status,
         traits: parseListField(colonistForm.traitsText),
@@ -600,7 +602,7 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
             <GitGraph className="w-5 h-5 text-amber-400" />
             <h3 className="font-serif font-bold text-base">Social Dynamic Web</h3>
             <span className="text-xs opacity-50 font-mono">
-              ({project.characters.length} Colonists • {project.relationships.length} Bonds)
+              ({project.characters.length} {lex.t("colonistsPlural")} • {project.relationships.length} Bonds)
             </span>
           </div>
 
@@ -653,10 +655,10 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
                   ? "border-amber-300 text-stone-700 hover:bg-amber-200/50"
                   : "border-cyan-900 text-cyan-300 hover:bg-cyan-950/60"
               }`}
-              title="Manually create a colonist (also generates their wiki article)"
+              title="Manually create a character (also generates their wiki article)"
             >
               <UserPlus className="w-3.5 h-3.5" />
-              <span>Add Colonist</span>
+              <span>{lex.t("addColonist")}</span>
             </button>
 
             <button
@@ -675,7 +677,7 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
               title="Add, edit, or delete factions in this project"
             >
               <Shield className="w-3.5 h-3.5" />
-              <span>Manage Factions</span>
+              <span>{lex.t("manageFactions")}</span>
             </button>
           </div>
         </div>
@@ -919,7 +921,7 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
                         : "bg-amber-500/20 text-amber-400"
                     }`}
                   >
-                    {selectedCharacter.status}
+                    {lex.status(selectedCharacter.status as CharacterStatus)}
                   </span>
                 </div>
               </div>
@@ -988,7 +990,7 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
             {selectedCharacter.healthConditions && (
               <div>
                 <span className="text-[11px] font-mono opacity-60 uppercase block mb-1">
-                  Health, Scars & Bionics:
+                  {lex.t("healthScarsBionics")}:
                 </span>
                 <div className="space-y-1">
                   {selectedCharacter.healthConditions.map((h, i) => (
@@ -1028,7 +1030,7 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
               <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
                 {characterRelationships.length === 0 ? (
                   <p className="text-xs opacity-50 italic py-2">
-                    No active relationship bonds recorded for this colonist.
+                    No active relationship bonds recorded for this {lex.t("colonistSingular").toLowerCase()}.
                   </p>
                 ) : (
                   characterRelationships.map((rel) => {
@@ -1082,7 +1084,7 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
         ) : (
           <div className="text-center py-20 opacity-60">
             <User className="w-10 h-10 mx-auto mb-2 opacity-40" />
-            <p className="text-xs">Click a character node on the network to view their dossier.</p>
+            <p className="text-xs">Click a character node on the network to view their {lex.t("dossierWord").toLowerCase()}.</p>
             <button
               onClick={openAddColonistModal}
               className={`mt-4 flex items-center space-x-1.5 mx-auto px-3 py-1.5 rounded-lg text-xs font-bold transition-transform active:scale-95 ${
@@ -1094,7 +1096,7 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
               }`}
             >
               <UserPlus className="w-3.5 h-3.5" />
-              <span>Add First Colonist</span>
+              <span>{lex.t("addFirstColonist")}</span>
             </button>
           </div>
         )}
@@ -1128,7 +1130,7 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="text-xs font-mono opacity-70 block mb-1">Source Colonist</label>
+                  <label className="text-xs font-mono opacity-70 block mb-1">{lex.t("sourceCharacter")}</label>
                   <select
                     value={relSource}
                     onChange={(e) => setRelSource(e.target.value)}
@@ -1142,7 +1144,7 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
                   </select>
                 </div>
                 <div>
-                  <label className="text-xs font-mono opacity-70 block mb-1">Target Colonist</label>
+                  <label className="text-xs font-mono opacity-70 block mb-1">{lex.t("targetCharacter")}</label>
                   <select
                     value={relTarget}
                     onChange={(e) => setRelTarget(e.target.value)}
@@ -1249,7 +1251,7 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
               <h3 className="font-serif font-bold text-base flex items-center space-x-2">
                 <UserPlus className="w-4 h-4 text-amber-500" />
                 <span>
-                  {colonistModalMode === "add" ? "Add Colonist" : `Edit Dossier: ${colonistForm.name || "Colonist"}`}
+                  {colonistModalMode === "add" ? lex.t("addColonist") : `Edit ${lex.t("dossierWord")}: ${colonistForm.name || lex.t("colonistSingular")}`}
                 </span>
               </h3>
               <button
@@ -1303,13 +1305,13 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
                   />
                 </div>
                 <div>
-                  <label className="font-mono opacity-70 block mb-1">Faction</label>
+                  <label className="font-mono opacity-70 block mb-1">{lex.t("factionSingular")}</label>
                   <select
                     value={colonistForm.faction}
                     onChange={(e) => setColonistForm({ ...colonistForm, faction: e.target.value })}
                     className={`w-full px-2 py-1.5 rounded-lg outline-none text-xs cursor-pointer ${selectClasses(theme)}`}
                   >
-                    <option value="">— No Faction —</option>
+                    <option value="">{lex.t("noFaction")}</option>
                     {project.factions.map((f) => (
                       <option key={f.id} value={f.name}>
                         {f.name}
@@ -1331,7 +1333,7 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
                   >
                     {CHARACTER_STATUSES.map((s) => (
                       <option key={s} value={s}>
-                        {s}
+                        {lex.status(s)}
                       </option>
                     ))}
                   </select>
@@ -1350,13 +1352,13 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
 
               <div>
                 <label className="font-mono opacity-70 block mb-1">
-                  Health, Scars &amp; Bionics (comma separated)
+                  {lex.t("healthScarsBionics")} (comma separated)
                 </label>
                 <input
                   type="text"
                   value={colonistForm.healthText}
                   onChange={(e) => setColonistForm({ ...colonistForm, healthText: e.target.value })}
-                  placeholder="Mangled Torso scar, Bionic Left Arm, Frostbitten finger"
+                  placeholder={lex.t("healthPlaceholder")}
                   className="w-full px-3 py-1.5 rounded-lg border bg-black/20 outline-none"
                 />
               </div>
@@ -1402,7 +1404,7 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
                     : "bg-cyan-500 text-slate-950 hover:bg-cyan-400"
                 }`}
               >
-                {colonistModalMode === "add" ? "Create Colonist" : "Save Dossier"}
+                {colonistModalMode === "add" ? lex.t("createColonist") : `Save ${lex.t("dossierWord")}`}
               </button>
             </div>
           </div>
@@ -1424,7 +1426,7 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
             <div className="flex justify-between items-center pb-2 border-b border-white/10">
               <h3 className="font-serif font-bold text-base flex items-center space-x-2">
                 <Shield className="w-4 h-4 text-red-400" />
-                <span>Manage Factions ({project.factions.length})</span>
+                <span>{lex.t("manageFactions")} ({project.factions.length})</span>
               </h3>
               <button
                 onClick={() => setIsFactionModalOpen(false)}
@@ -1499,7 +1501,7 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
             {/* Add / edit form */}
             <div className="pt-2 border-t border-white/10 space-y-3 text-xs">
               <h4 className="font-mono uppercase font-bold text-[10px] opacity-60 tracking-wider">
-                {editingFactionId ? `Editing: ${factionForm.name || "faction"}` : "Add New Faction"}
+                {editingFactionId ? `Editing: ${factionForm.name || "faction"}` : lex.t("addNewFaction")}
               </h4>
 
               <div className="grid grid-cols-2 gap-2">

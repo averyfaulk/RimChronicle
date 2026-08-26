@@ -76,6 +76,7 @@ import { ScenarioLibraryModal } from "./ScenarioLibraryModal";
 import { WifiOff } from "lucide-react";
 import { BUILTIN_TENETS, applyInferredAnalysis, applyPreceptAnalysis } from "../../lib/preceptEngine";
 import { selectClasses } from "../../lib/uiTheme";
+import { useLexicon } from "../../lib/lexicon";
 
 interface ChronicleTimelineProps {
   project: StoryProject;
@@ -94,6 +95,7 @@ export const ChronicleTimeline: React.FC<ChronicleTimelineProps> = ({
   onNavigateToNovelWithEvent,
   onNavigateToArticle,
 }) => {
+  const lex = useLexicon();
   const [selectedCategory, setSelectedCategory] = useState<string>("All");
   const [selectedThreat, setSelectedThreat] = useState<string>("All");
   const [selectedParticipant, setSelectedParticipant] = useState<string>("All");
@@ -706,13 +708,13 @@ export const ChronicleTimeline: React.FC<ChronicleTimelineProps> = ({
           <div>
             <div className="flex items-center space-x-2">
               <Clock className="w-5 h-5 text-amber-400" />
-              <h3 className="font-serif font-bold text-lg">Colony Chronicle Timeline</h3>
+              <h3 className="font-serif font-bold text-lg">{lex.t("timelineHeader")}</h3>
               <span className="text-xs opacity-50 font-mono">
                 ({project.timelineEvents.length} Recorded Beats)
               </span>
             </div>
             <p className="text-xs opacity-75 mt-0.5">
-              Chronological history of RimWorld playthrough seasons, combat sieges, breakthroughs, and tragedies.
+              {lex.t("timelineSubtitle")}
             </p>
           </div>
 
@@ -815,7 +817,7 @@ export const ChronicleTimeline: React.FC<ChronicleTimelineProps> = ({
               <option value="All">All Categories</option>
               {categories.map((c) => (
                 <option key={c} value={c}>
-                  {c}
+                  {lex.evCat(c)}
                 </option>
               ))}
             </select>
@@ -837,13 +839,13 @@ export const ChronicleTimeline: React.FC<ChronicleTimelineProps> = ({
           </div>
 
           <div>
-            <label className="text-[10px] font-mono opacity-60 uppercase block mb-1">Involved Colonist</label>
+            <label className="text-[10px] font-mono opacity-60 uppercase block mb-1">{lex.t("involvedCharacter")}</label>
             <select
               value={selectedParticipant}
               onChange={(e) => setSelectedParticipant(e.target.value)}
               className={`w-full px-2.5 py-1.5 rounded-lg outline-none text-xs cursor-pointer ${selectClasses(theme)}`}
             >
-              <option value="All">All Colonists</option>
+              <option value="All">{lex.t("allCharacters")}</option>
               {project.characters.map((c) => (
                 <option key={c.id} value={c.name}>
                   {c.nickname || c.name}
@@ -853,7 +855,7 @@ export const ChronicleTimeline: React.FC<ChronicleTimelineProps> = ({
           </div>
 
           <div>
-            <label className="text-[10px] font-mono opacity-60 uppercase block mb-1">Search Chronicle</label>
+            <label className="text-[10px] font-mono opacity-60 uppercase block mb-1">{lex.t("searchChronicle")}</label>
             <input
               type="text"
               placeholder="Search title, description, location..."
@@ -948,7 +950,7 @@ export const ChronicleTimeline: React.FC<ChronicleTimelineProps> = ({
                         {evt.threatLevel}
                       </span>
                       <span className="text-[10px] font-mono opacity-50 px-1.5 py-0.2 rounded bg-black/20">
-                        {evt.category}
+                        {lex.evCat(evt.category)}
                       </span>
                     </div>
                     <h4 className="font-serif font-bold text-base sm:text-lg">{evt.title}</h4>
@@ -1190,7 +1192,7 @@ export const ChronicleTimeline: React.FC<ChronicleTimelineProps> = ({
                   />
                 </div>
                 <div>
-                  <label className="font-mono opacity-70 block mb-1">Quadrum / Epoch</label>
+                  <label className="font-mono opacity-70 block mb-1">{lex.t("quadrumEpoch")}</label>
                   <input
                     type="text"
                     value={newQuadrum}
@@ -1222,7 +1224,7 @@ export const ChronicleTimeline: React.FC<ChronicleTimelineProps> = ({
                   >
                     {categories.map((c) => (
                       <option key={c} value={c}>
-                        {c}
+                        {lex.evCat(c)}
                       </option>
                     ))}
                   </select>
@@ -1458,7 +1460,7 @@ export const ChronicleTimeline: React.FC<ChronicleTimelineProps> = ({
                 }`}>
                   <span className="text-[10px] font-mono opacity-60 uppercase block mb-0.5">Current Timeline Date</span>
                   <span className="font-mono font-bold text-amber-400">
-                    {currentTimelineDate ? formatRimWorldDate(currentTimelineDate) : "Unknown"}
+                    {currentTimelineDate ? lex.date(currentTimelineDate) : "Unknown"}
                   </span>
                 </div>
                 <div className={`p-2.5 rounded-xl border ${
@@ -1621,7 +1623,7 @@ export const ChronicleTimeline: React.FC<ChronicleTimelineProps> = ({
                       }`}
                     >
                       <span className="text-[10px] font-mono opacity-60 uppercase block mb-1.5">
-                        Colony Snapshot @ {currentTimelineDate ? formatRimWorldDate(currentTimelineDate) : "Unknown"}
+                        Colony Snapshot @ {currentTimelineDate ? lex.date(currentTimelineDate) : "Unknown"}
                       </span>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5">
                         <div>
@@ -1899,7 +1901,7 @@ export const ChronicleTimeline: React.FC<ChronicleTimelineProps> = ({
                       >
                         {categories.map((c) => (
                           <option key={c} value={c}>
-                            {c}
+                            {lex.evCat(c)}
                           </option>
                         ))}
                       </select>

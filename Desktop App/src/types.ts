@@ -322,6 +322,15 @@ export interface StoryAct {
   chapters: StoryChapter[];
 }
 
+export interface CanonConstraint {
+  id: string;
+  title: string;
+  ruleStatement: string;
+  reminderMessage: string;
+  keywords: string[];
+  isEnabled: boolean;
+}
+
 export type PlotGapType =
   | "Contradiction"
   | "Missing Bridge"
@@ -377,6 +386,7 @@ export interface StoryProject {
   relics: RelicItem[];
   relationships: CharacterRelationship[];
   storyHierarchy: StoryAct[];
+  canonConstraints?: CanonConstraint[];
   mapRoutes?: MapRoute[];
   mapSettings?: MapSettings;
   plotGapReport?: PlotGapAnalysisReport;

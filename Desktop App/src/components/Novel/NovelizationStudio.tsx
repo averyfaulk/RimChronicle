@@ -19,7 +19,9 @@ import {
   FileText,
   Layers,
   Flame,
-  Bookmark
+  Bookmark,
+  Scale,
+  AlertTriangle
 } from "lucide-react";
 import {
   StoryAct,
@@ -32,6 +34,8 @@ import { selectClasses } from "../../lib/uiTheme";
 import { EntityLookup } from "../../lib/wikiParser";
 import { MarkdownRenderer } from "../Wiki/MarkdownRenderer";
 import { downloadBlob } from "../../lib/zipExporter";
+import { extractCanonViolations, CanonViolation } from "../../lib/canonEngine";
+import { CanonConstraintManagerModal } from "./CanonConstraintManagerModal";
 
 interface NovelizationStudioProps {
   project: StoryProject;
@@ -76,6 +80,10 @@ export const NovelizationStudio: React.FC<NovelizationStudioProps> = ({
   const [newChapterTitle, setNewChapterTitle] = useState("");
   const [newChapterSummary, setNewChapterSummary] = useState("");
 
+  // Canon Constraint Panel state
+  const [isCanonModalOpen, setIsCanonModalOpen] = useState(false);
+  const [violationBanner, setViolationBanner] = useState<CanonViolation[] | null>(null);
+
   const currentAct = useMemo(() => {
     return project.storyHierarchy.find((a) => a.id === selectedActId) || project.storyHierarchy[0];
   }, [project.storyHierarchy, selectedActId]);
@@ -101,11 +109,47 @@ export const NovelizationStudio: React.FC<NovelizationStudioProps> = ({
     return count;
   }, [project.storyHierarchy]);
 
+  const enabledConstraints = useMemo(
+    () => (project.canonConstraints ?? []).filter((c) => c.isEnabled),
+    [project.canonConstraints]
+  );
+
+  const chapterViolations = useMemo(() => {
+    const map = new Map<string, CanonViolation[]>();
+    project.storyHierarchy.forEach((act) =>
+      act.chapters.forEach((chap) => {
+        const text = chap.fullChapterMarkdown || "";
+        if (!text.trim()) return;
+        const hits = extractCanonViolations(text, enabledConstraints);
+        if (hits.length > 0) map.set(chap.id, hits);
+      })
+    );
+    return map;
+  }, [project.storyHierarchy, enabledConstraints]);
+
+  const totalViolations = useMemo(
+    () =>
+      Array.from(chapterViolations.values()).reduce(
+        (sum, list) => sum + list.length,
+        0
+      ),
+    [chapterViolations]
+  );
+
+  const draftViolations = useMemo(
+    () =>
+      isEditingChapter
+        ? extractCanonViolations(draftContent, enabledConstraints)
+        : [],
+    [draftContent, enabledConstraints, isEditingChapter]
+  );
+
   const handleSelectChapter = (actId: string, chapId: string) => {
     setSelectedActId(actId);
     setSelectedChapterId(chapId);
     setViewFullManuscript(false);
     setIsEditingChapter(false);
+    setViolationBanner(null);
   };
 
   const handleStartEdit = () => {
@@ -145,6 +189,7 @@ export const NovelizationStudio: React.FC<NovelizationStudioProps> = ({
       lastUpdated: new Date().toISOString(),
     });
 
+    setViolationBanner(draftViolations.length > 0 ? draftViolations : null);
     setIsEditingChapter(false);
   };
 
@@ -243,6 +288,14 @@ export const NovelizationStudio: React.FC<NovelizationStudioProps> = ({
           customStyleInstructions: customStyleNotes,
           pointOfView,
           wordCountTarget,
+          ...(enabledConstraints.length > 0
+            ? {
+                canonConstraints: enabledConstraints.map((c) => ({
+                  title: c.title,
+                  ruleStatement: c.ruleStatement,
+                })),
+              }
+            : {}),
         }),
       });
 
@@ -277,6 +330,13 @@ export const NovelizationStudio: React.FC<NovelizationStudioProps> = ({
           storyHierarchy: updatedHierarchy,
           lastUpdated: new Date().toISOString(),
         });
+        const generatedViolations = extractCanonViolations(
+          data.novelContent,
+          enabledConstraints
+        );
+        setViolationBanner(
+          generatedViolations.length > 0 ? generatedViolations : null
+        );
         setIsAiModalOpen(false);
       }
     } catch (err: any) {
@@ -333,6 +393,37 @@ export const NovelizationStudio: React.FC<NovelizationStudioProps> = ({
             {viewFullManuscript ? "Chapter View" : "Full Book"}
           </button>
         </div>
+
+        {/* Canon Constraint Panel launcher */}
+        <button
+          id="btn-canon-constraints"
+          onClick={() => setIsCanonModalOpen(true)}
+          className={`w-full flex items-center justify-between px-3 py-2 rounded-xl border text-xs font-semibold transition-colors ${
+            theme === "dark"
+              ? "bg-[#17171d] border-[#22222b] hover:border-red-500/40"
+              : theme === "parchment"
+              ? "bg-amber-100/60 border-amber-200 hover:border-red-400/60"
+              : "bg-slate-900/70 border-cyan-900 hover:border-red-400/50"
+          }`}
+          title="Define absolute world laws the scanner enforces on every draft"
+        >
+          <span className="flex items-center gap-1.5">
+            <Scale className="w-3.5 h-3.5 text-red-400" />
+            <span>Canon Constraints</span>
+          </span>
+          <span className="flex items-center gap-1.5 font-mono text-[10px]">
+            <span className="opacity-60">
+              {enabledConstraints.length} law{enabledConstraints.length === 1 ? "" : "s"}
+            </span>
+            {totalViolations > 0 ? (
+              <span className="px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 font-bold">
+                ⚠ {totalViolations}
+              </span>
+            ) : (
+              <Check className="w-3 h-3 text-emerald-400" />
+            )}
+          </span>
+        </button>
 
         {/* Acts & Chapters List with Drag / Reorder buttons */}
         <div className="space-y-4 max-h-[620px] overflow-y-auto pr-1">
@@ -475,12 +566,48 @@ export const NovelizationStudio: React.FC<NovelizationStudioProps> = ({
               </button>
             </div>
 
+            {totalViolations > 0 && (
+              <div className="p-3 rounded-xl border border-red-500/30 bg-red-500/10 space-y-1.5">
+                <p className="text-xs font-bold text-red-400 flex items-center gap-1.5">
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                  Canon scan: {totalViolations} constraint{" "}
+                  {totalViolations === 1 ? "violation" : "violations"} across the
+                  manuscript
+                </p>
+                <div className="space-y-1">
+                  {project.storyHierarchy.map((act) =>
+                    act.chapters
+                      .filter((chap) => chapterViolations.has(chap.id))
+                      .map((chap) => {
+                        const hits = chapterViolations.get(chap.id)!;
+                        const uniqueLaws = Array.from(
+                          new Set(hits.map((h) => h.constraintTitle))
+                        );
+                        return (
+                          <button
+                            key={chap.id}
+                            onClick={() => handleSelectChapter(act.id, chap.id)}
+                            className="block w-full text-left text-[11px] text-red-300/90 hover:text-red-200 hover:bg-red-500/10 rounded px-1.5 py-0.5"
+                          >
+                            <span className="font-semibold">{chap.title}</span>
+                            {" — "}
+                            {hits.length} hit{hits.length === 1 ? "" : "s"} (
+                            {uniqueLaws.join(", ")})
+                          </button>
+                        );
+                      })
+                  )}
+                </div>
+              </div>
+            )}
+
             <div className="pt-2">
               <MarkdownRenderer
                 content={compiledFullManuscript}
                 lookup={lookup}
                 theme={theme}
                 onNavigateToArticle={onNavigateToArticle}
+                canonConstraints={enabledConstraints}
               />
             </div>
           </div>
@@ -555,6 +682,46 @@ export const NovelizationStudio: React.FC<NovelizationStudioProps> = ({
               </div>
             </div>
 
+            {/* Constraint Violation Reminder Banner */}
+            {violationBanner && violationBanner.length > 0 && (
+              <div
+                id="canon-violation-banner"
+                className="flex items-start justify-between gap-3 p-3 rounded-xl border border-red-500/40 bg-red-500/10"
+              >
+                <div className="space-y-1 min-w-0">
+                  {Array.from(
+                    new Set(violationBanner.map((v) => v.reminderMessage))
+                  )
+                    .slice(0, 3)
+                    .map((msg) => (
+                      <p
+                        key={msg}
+                        className="text-xs font-bold text-red-400 flex items-center gap-1.5"
+                      >
+                        <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                        Constraint Violation: {msg}
+                      </p>
+                    ))}
+                  {violationBanner.length > 1 && (
+                    <p className="text-[11px] text-red-300/80 font-mono">
+                      {violationBanner.length} flagged sentence
+                      {violationBanner.length === 2 ? "" : "s"} in this chapter —{" "}
+                      {isEditingChapter
+                        ? "listed below the editor"
+                        : "highlighted in red"}
+                    </p>
+                  )}
+                </div>
+                <button
+                  onClick={() => setViolationBanner(null)}
+                  className="text-xs opacity-60 hover:opacity-100 shrink-0"
+                  title="Dismiss reminder"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+
             {/* Chapter Editor or Markdown View */}
             {isEditingChapter ? (
               <div className="space-y-3">
@@ -575,6 +742,37 @@ export const NovelizationStudio: React.FC<NovelizationStudioProps> = ({
                   }`}
                   placeholder="Write chapter manuscript in literary Markdown..."
                 />
+                {draftViolations.length > 0 && (
+                  <div className="space-y-1.5 p-3 rounded-xl border border-red-500/30 bg-red-500/10">
+                    <p className="text-xs font-bold text-red-400 flex items-center gap-1.5 font-mono uppercase tracking-wide">
+                      <AlertTriangle className="w-3.5 h-3.5" />
+                      {draftViolations.length} live canon{" "}
+                      {draftViolations.length === 1 ? "violation" : "violations"}
+                    </p>
+                    {draftViolations.slice(0, 8).map((v, i) => (
+                      <div
+                        key={`${v.constraintId}-${v.start}-${i}`}
+                        className="text-xs leading-relaxed"
+                      >
+                        <span className="inline-block px-1.5 py-0.5 mr-1.5 rounded bg-red-500/20 text-red-300 text-[9px] uppercase font-mono font-bold align-middle">
+                          {v.constraintTitle}
+                        </span>
+                        <span className="text-red-300/90 italic">
+                          "{v.sentence.trim().slice(0, 160)}
+                          {v.sentence.trim().length > 160 ? "…" : ""}"
+                        </span>
+                        <span className="block pl-1 opacity-80">
+                          ⚠️ {v.reminderMessage}
+                        </span>
+                      </div>
+                    ))}
+                    {draftViolations.length > 8 && (
+                      <p className="text-[10px] opacity-60 font-mono">
+                        +{draftViolations.length - 8} more…
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
             ) : currentChapter.fullChapterMarkdown ? (
               <div className="pt-2">
@@ -583,6 +781,7 @@ export const NovelizationStudio: React.FC<NovelizationStudioProps> = ({
                   lookup={lookup}
                   theme={theme}
                   onNavigateToArticle={onNavigateToArticle}
+                  canonConstraints={enabledConstraints}
                 />
               </div>
             ) : (
@@ -754,6 +953,17 @@ export const NovelizationStudio: React.FC<NovelizationStudioProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Canon Constraint Panel */}
+      {isCanonModalOpen && (
+        <CanonConstraintManagerModal
+          project={project}
+          setProject={setProject}
+          theme={theme}
+          isAiMode={isAiMode}
+          onClose={() => setIsCanonModalOpen(false)}
+        />
       )}
 
       {/* Add Chapter Modal */}

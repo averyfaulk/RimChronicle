@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { ThemeMode } from "../../types";
 import { EntityLookup, findEntityByLinkText } from "../../lib/wikiParser";
+import { useLexicon } from "../../lib/lexicon";
 
 interface WikiHoverCardProps {
   linkText: string;
@@ -28,6 +29,7 @@ export const WikiHoverCard: React.FC<WikiHoverCardProps> = ({
   onNavigateToArticle,
   children,
 }) => {
+  const lex = useLexicon();
   const [isOpen, setIsOpen] = useState(false);
   const [hoverTimeout, setHoverTimeout] = useState<any>(null);
 
@@ -233,7 +235,7 @@ export const WikiHoverCard: React.FC<WikiHoverCardProps> = ({
                   : "bg-cyan-950 hover:bg-cyan-900 text-cyan-300"
               }`}
             >
-              Open Wiki Dossier →
+              Open Wiki {lex.t("dossierWord")} →
             </button>
           </div>
         </div>

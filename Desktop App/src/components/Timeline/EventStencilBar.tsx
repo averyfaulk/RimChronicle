@@ -2,6 +2,7 @@ import React from "react";
 import { Settings2, Layers } from "lucide-react";
 import { EventTemplate, ThemeMode } from "../../types";
 import { accentClasses, TemplateIcon } from "./TemplateIcon";
+import { useLexicon } from "../../lib/lexicon";
 
 interface EventStencilBarProps {
   templates: EventTemplate[];
@@ -20,6 +21,7 @@ export const EventStencilBar: React.FC<EventStencilBarProps> = ({
   onManage,
   theme,
 }) => {
+  const lex = useLexicon();
   return (
     <div className="flex flex-wrap items-center gap-1.5">
       <span className="flex items-center space-x-1 text-[10px] font-mono uppercase opacity-50 mr-1">
@@ -34,10 +36,10 @@ export const EventStencilBar: React.FC<EventStencilBarProps> = ({
             key={tpl.id}
             onClick={() => onSelect(tpl)}
             className={`flex items-center space-x-1.5 px-2.5 py-1.5 rounded-lg border text-[11px] font-bold transition-all active:scale-95 ${accent.chip} ${accent.text}`}
-            title={`Record a "${tpl.name}" event — ${tpl.descriptionTemplate.slice(0, 60)}…`}
+            title={`Record a "${lex.tplName(tpl)}" event — ${tpl.descriptionTemplate.slice(0, 60)}…`}
           >
             <TemplateIcon icon={tpl.icon} />
-            <span>{tpl.name}</span>
+            <span>{lex.tplName(tpl)}</span>
           </button>
         );
       })}

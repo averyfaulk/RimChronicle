@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { ActiveTab, StoryProject, ThemeMode } from "./types";
+import { LexiconContext, LexiconMode, loadLexiconMode, saveLexiconMode } from "./lib/lexicon";
 import { Navigation } from "./components/Navigation";
 import { WelcomeScreen } from "./components/Startup/WelcomeScreen";
 import { WikiManager } from "./components/Wiki/WikiManager";
@@ -30,6 +31,7 @@ const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<ActiveTab>("wiki");
   const [theme, setTheme] = useState<ThemeMode>("dark");
   const [isAiMode, setIsAiMode] = useState(false);
+  const [lexiconMode, setLexiconMode] = useState<LexiconMode>(() => loadLexiconMode());
   const [showLibrary, setShowLibrary] = useState(false);
   const [ingestOpen, setIngestOpen] = useState(false);
   const [selectedArticleId, setSelectedArticleId] = useState<string | undefined>(undefined);
@@ -48,6 +50,11 @@ const App: React.FC = () => {
 
   const refreshWikis = () => {
     setWikis(listWikis());
+  };
+
+  const handleSetLexiconMode = (mode: LexiconMode) => {
+    setLexiconMode(mode);
+    saveLexiconMode(mode);
   };
 
   const lookup: EntityLookup = useMemo(
@@ -133,6 +140,7 @@ const App: React.FC = () => {
   }
 
   return (
+    <LexiconContext.Provider value={lexiconMode}>
     <div
       className={`min-h-screen transition-colors duration-200 ${
         theme === "dark"
@@ -150,6 +158,8 @@ const App: React.FC = () => {
         project={project}
         isAiMode={isAiMode}
         setIsAiMode={setIsAiMode}
+        lexiconMode={lexiconMode}
+        setLexiconMode={handleSetLexiconMode}
         onOpenIngestModal={() => setIngestOpen(true)}
         onExportZip={handleExportZip}
         onOpenLibrary={() => setShowLibrary(true)}
@@ -241,6 +251,7 @@ const App: React.FC = () => {
         </div>
       )}
     </div>
+    </LexiconContext.Provider>
   );
 };
 

@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { WikiArticle, ArticleCategory, ThemeMode, StoryProject } from "../../types";
 import { selectClasses } from "../../lib/uiTheme";
+import { useLexicon } from "../../lib/lexicon";
 import {
   EntityLookup,
   computeArticleBacklinks,
@@ -52,6 +53,8 @@ export const WikiManager: React.FC<WikiManagerProps> = ({
   selectedArticleId,
   setSelectedArticleId,
 }) => {
+  const lex = useLexicon();
+
   const [activeCategory, setActiveCategory] = useState<string>("All");
   const [searchQuery, setSearchQuery] = useState("");
   const [isEditing, setIsEditing] = useState(false);
@@ -76,22 +79,22 @@ export const WikiManager: React.FC<WikiManagerProps> = ({
     return computeArticleBacklinks(project.wikiArticles);
   }, [project.wikiArticles]);
 
-  const categories: { label: string; count: number; icon: React.ReactNode }[] = useMemo(() => {
+  const categories: { value: string; label: string; count: number; icon: React.ReactNode }[] = useMemo(() => {
     const counts: Record<string, number> = { All: project.wikiArticles.length };
     project.wikiArticles.forEach((a) => {
       counts[a.category] = (counts[a.category] || 0) + 1;
     });
 
     return [
-      { label: "All", count: counts["All"] || 0, icon: <Layers className="w-3.5 h-3.5" /> },
-      { label: "Characters", count: counts["Characters"] || 0, icon: <User className="w-3.5 h-3.5" /> },
-      { label: "Factions", count: counts["Factions"] || 0, icon: <Shield className="w-3.5 h-3.5" /> },
-      { label: "Locations", count: counts["Locations"] || 0, icon: <MapPin className="w-3.5 h-3.5" /> },
-      { label: "Relics", count: counts["Relics"] || 0, icon: <Sparkles className="w-3.5 h-3.5" /> },
-      { label: "Chronicles", count: counts["Chronicles"] || 0, icon: <FileText className="w-3.5 h-3.5" /> },
-      { label: "Lore", count: counts["Lore"] || 0, icon: <BookOpen className="w-3.5 h-3.5" /> },
+      { value: "All", label: "All", count: counts["All"] || 0, icon: <Layers className="w-3.5 h-3.5" /> },
+      { value: "Characters", label: lex.cat("Characters"), count: counts["Characters"] || 0, icon: <User className="w-3.5 h-3.5" /> },
+      { value: "Factions", label: lex.cat("Factions"), count: counts["Factions"] || 0, icon: <Shield className="w-3.5 h-3.5" /> },
+      { value: "Locations", label: lex.cat("Locations"), count: counts["Locations"] || 0, icon: <MapPin className="w-3.5 h-3.5" /> },
+      { value: "Relics", label: lex.cat("Relics"), count: counts["Relics"] || 0, icon: <Sparkles className="w-3.5 h-3.5" /> },
+      { value: "Chronicles", label: lex.cat("Chronicles"), count: counts["Chronicles"] || 0, icon: <FileText className="w-3.5 h-3.5" /> },
+      { value: "Lore", label: lex.cat("Lore"), count: counts["Lore"] || 0, icon: <BookOpen className="w-3.5 h-3.5" /> },
     ];
-  }, [project.wikiArticles]);
+  }, [project.wikiArticles, lex]);
 
   const filteredArticles = useMemo(() => {
     return project.wikiArticles.filter((art) => {
@@ -345,10 +348,10 @@ export const WikiManager: React.FC<WikiManagerProps> = ({
         <div className="flex items-center flex-wrap gap-1.5 pb-1">
           {categories.map((cat) => (
             <button
-              key={cat.label}
-              onClick={() => setActiveCategory(cat.label)}
+              key={cat.value}
+              onClick={() => setActiveCategory(cat.value)}
               className={`flex items-center space-x-1 px-2.5 py-1 rounded-lg text-xs font-medium whitespace-nowrap transition-colors ${
-                activeCategory === cat.label
+                activeCategory === cat.value
                   ? theme === "dark"
                     ? "bg-[#1f1f26] text-amber-400 border border-[#2e2e38] font-semibold"
                     : theme === "parchment"
@@ -411,7 +414,7 @@ export const WikiManager: React.FC<WikiManagerProps> = ({
                             : "bg-purple-500/20 text-purple-400"
                         }`}
                       >
-                        {art.category}
+                        {lex.cat(art.category)}
                       </span>
                       <span className="text-[10px] opacity-40 font-mono">
                         {art.wordCount || art.markdownContent.split(/\s+/).length} words
@@ -472,7 +475,7 @@ export const WikiManager: React.FC<WikiManagerProps> = ({
                       : "bg-purple-500/20 text-purple-400"
                   }`}
                 >
-                  {currentArticle.category}
+                  {lex.cat(currentArticle.category)}
                 </span>
                 <span className="text-xs opacity-50 font-mono">
                   {currentArticle.wordCount || currentArticle.markdownContent.split(/\s+/).length} words
@@ -611,12 +614,12 @@ export const WikiManager: React.FC<WikiManagerProps> = ({
                       onChange={(e) => setEditedCategory(e.target.value as ArticleCategory)}
                       className={`w-full px-3 py-1.5 rounded-lg outline-none text-sm cursor-pointer ${selectClasses(theme)}`}
                     >
-                      <option value="Characters">Characters</option>
-                      <option value="Factions">Factions</option>
-                      <option value="Locations">Locations</option>
-                      <option value="Relics">Relics</option>
-                      <option value="Chronicles">Chronicles</option>
-                      <option value="Lore">Lore</option>
+                      <option value="Characters">{lex.cat("Characters")}</option>
+                      <option value="Factions">{lex.cat("Factions")}</option>
+                      <option value="Locations">{lex.cat("Locations")}</option>
+                      <option value="Relics">{lex.cat("Relics")}</option>
+                      <option value="Chronicles">{lex.cat("Chronicles")}</option>
+                      <option value="Lore">{lex.cat("Lore")}</option>
                     </select>
                   </div>
                   <div>
@@ -751,12 +754,12 @@ export const WikiManager: React.FC<WikiManagerProps> = ({
                   onChange={(e) => setNewCategory(e.target.value as ArticleCategory)}
                   className={`w-full px-3 py-2 rounded-xl outline-none text-sm cursor-pointer ${selectClasses(theme)}`}
                 >
-                  <option value="Characters">Characters (Colonists, Enemies, Nobles)</option>
-                  <option value="Factions">Factions (Settlements, Cartels, Tribes)</option>
-                  <option value="Locations">Locations (Base Sectors, Ruins, Shrines)</option>
-                  <option value="Relics">Relics & Tech (Persona Weapons, Archotech)</option>
-                  <option value="Chronicles">Chronicles (Sieges, Cold Snaps, Tragedies)</option>
-                  <option value="Lore">Lore & Ideoligions (Philosophy, Legends)</option>
+                  <option value="Characters">{lex.catHint("Characters")}</option>
+                  <option value="Factions">{lex.catHint("Factions")}</option>
+                  <option value="Locations">{lex.catHint("Locations")}</option>
+                  <option value="Relics">{lex.catHint("Relics")}</option>
+                  <option value="Chronicles">{lex.catHint("Chronicles")}</option>
+                  <option value="Lore">{lex.catHint("Lore")}</option>
                 </select>
               </div>
             </div>

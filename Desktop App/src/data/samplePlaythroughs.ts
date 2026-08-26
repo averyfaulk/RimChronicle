@@ -90,6 +90,25 @@ const basePlaythroughProject: StoryProject = {
     }),
   ],
   culturalFrictionPoints: [],
+  canonConstraints: [
+    {
+      id: "canon-sample-ftl",
+      title: "FTL Prohibited",
+      ruleStatement: "No faster-than-light travel exists within this system.",
+      reminderMessage: "FTL is prohibited in your canon.",
+      keywords: [
+        "ftl",
+        "faster than light",
+        "warp drive",
+        "warp jump",
+        "hyperdrive",
+        "jump drive",
+        "hyperspace",
+        "lightspeed",
+      ],
+      isEnabled: true,
+    },
+  ],
   chronicleLogHistory: [
     "5501 Aprimay 1: Three crashlanded survivors emerge from burning cryptosleep caskets onto the subzero slopes of Mount Karas. Dr. Valerie 'Vex' Vance, Cole 'Hammer' Briggs, and the slave architect Rex.",
     "5501 Jugust 14: Cold snap plunges temperatures to -48C. Food stores deplete. Cole's bonded thrumbo 'Aegis' loses an ear to frostbite. Vex performs emergency bionic eye surgery under candlelight.",

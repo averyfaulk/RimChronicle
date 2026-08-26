@@ -5,12 +5,12 @@ import {
   QUADRUMS,
   DAYS_PER_QUADRUM,
   advanceMasterClock,
-  formatRimWorldDate,
   getMasterClockDate,
   parseRimWorldTimestamp,
   setMasterClock,
 } from "../../lib/downtime";
 import { selectClasses } from "../../lib/uiTheme";
+import { useLexicon } from "../../lib/lexicon";
 
 interface MasterClockWidgetProps {
   project: StoryProject;
@@ -28,6 +28,7 @@ export const MasterClockWidget: React.FC<MasterClockWidgetProps> = ({
   setProject,
   theme,
 }) => {
+  const lex = useLexicon();
   const [isOpen, setIsOpen] = useState(false);
   const effective = getMasterClockDate(project);
   const isExplicit = Boolean(project.masterClock);
@@ -67,7 +68,7 @@ export const MasterClockWidget: React.FC<MasterClockWidgetProps> = ({
         }`}
         title={
           isExplicit
-            ? `Master clock is set to ${effective ? formatRimWorldDate(effective) : "—"}`
+            ? `Master clock is set to ${effective ? lex.date(effective) : "—"}`
             : "Master clock follows the latest recorded event (auto). Click to set it."
         }
       >
@@ -76,7 +77,7 @@ export const MasterClockWidget: React.FC<MasterClockWidgetProps> = ({
         ) : (
           <Clock className="w-3.5 h-3.5 text-amber-400" />
         )}
-        <span className="font-mono">{effective ? formatRimWorldDate(effective) : "Set Colony Date"}</span>
+        <span className="font-mono">{effective ? lex.date(effective) : "Set Colony Date"}</span>
         {!isExplicit && (
           <span className="text-[9px] uppercase font-mono opacity-50 px-1 py-0.2 rounded bg-white/10">
             auto
@@ -95,7 +96,7 @@ export const MasterClockWidget: React.FC<MasterClockWidgetProps> = ({
               : "bg-slate-900 border-cyan-800 text-cyan-50"
           }`}
         >
-          <span className="text-[10px] font-mono uppercase opacity-60 block">Colony Master Clock</span>
+          <span className="text-[10px] font-mono uppercase opacity-60 block">{lex.t("masterClockTitle")}</span>
 
           <div className="grid grid-cols-[1fr_1fr_1fr] gap-1.5">
             <div>
@@ -113,7 +114,7 @@ export const MasterClockWidget: React.FC<MasterClockWidgetProps> = ({
               </select>
             </div>
             <div>
-              <label className="text-[9px] font-mono opacity-60 block mb-0.5">Quadrum</label>
+              <label className="text-[9px] font-mono opacity-60 block mb-0.5">{lex.t("quadrumUnit")}</label>
               <select
                 value={quadrum}
                 onChange={(e) => setQuadrum(parseInt(e.target.value))}
@@ -121,7 +122,7 @@ export const MasterClockWidget: React.FC<MasterClockWidgetProps> = ({
               >
                 {QUADRUMS.map((q, i) => (
                   <option key={q} value={i}>
-                    {q}
+                    {lex.quadrum(i)}
                   </option>
                 ))}
               </select>
@@ -182,7 +183,7 @@ export const MasterClockWidget: React.FC<MasterClockWidgetProps> = ({
 
           {/* Kept small hint for backdating */}
           <p className="text-[10px] opacity-60 italic">
-            {effective ? `Currently: ${formatRimWorldDate(effective)}` : "No date recorded yet."}
+            {effective ? `Currently: ${lex.date(effective)}` : "No date recorded yet."}
           </p>
 
           {parseRimWorldTimestamp(project.timelineEvents[project.timelineEvents.length - 1]?.timestamp || "") && (
