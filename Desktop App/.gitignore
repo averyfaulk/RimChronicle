@@ -1,0 +1,11 @@
+node_modules/
+build/
+dist/
+release/
+coverage/
+.DS_Store
+*.log
+.env*
+!.env.example
+electron/backend.cjs
+electron/backend.cjs.map

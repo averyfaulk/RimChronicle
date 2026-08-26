@@ -1,0 +1,42 @@
+@import "tailwindcss";
+
+/*
+ * Native <select> dropdown popup theming.
+ * The closed select is styled per-component, but the opened options list is
+ * rendered by the OS/browser. These rules (paired with the data-theme
+ * attribute and color-scheme set from App.tsx) make it match the app theme.
+ */
+html {
+  color-scheme: light;
+}
+
+select option,
+select optgroup {
+  font-family: inherit;
+}
+
+html[data-theme="dark"] select option {
+  background-color: #17171d;
+  color: #e2e8f0;
+}
+
+html[data-theme="dark"] select option:checked,
+html[data-theme="cyber"] select option:checked {
+  background-color: #f59e0b;
+  color: #0c0c0e;
+}
+
+html[data-theme="parchment"] select option {
+  background-color: #fffbeb;
+  color: #292524;
+}
+
+html[data-theme="parchment"] select option:checked {
+  background-color: #b45309;
+  color: #fffbeb;
+}
+
+html[data-theme="cyber"] select option {
+  background-color: #0c1a2b;
+  color: #e2e8f0;
+}
