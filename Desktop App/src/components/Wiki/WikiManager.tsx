@@ -470,7 +470,7 @@ export const WikiManager: React.FC<WikiManagerProps> = ({
           <div>
             {/* Top Toolbar */}
             <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-white/10">
-              <div className="flex items-center space-x-2">
+              <div className="flex items-start gap-2">
                 <span
                   className={`text-xs uppercase font-mono px-2 py-0.5 rounded-md font-bold ${
                     currentArticle.category === "Characters"
@@ -486,12 +486,26 @@ export const WikiManager: React.FC<WikiManagerProps> = ({
                 >
                   {lex.cat(currentArticle.category)}
                 </span>
-                <span className="text-xs opacity-50 font-mono">
-                  {currentArticle.wordCount || currentArticle.markdownContent.split(/\s+/).length} words
-                </span>
-                <span className="text-xs opacity-40 font-mono">
-                  • Modified {currentArticle.lastModified}
-                </span>
+                <div className="min-w-0">
+                  {linkedCharacter && (
+                    <span className="block font-serif font-bold text-base leading-snug truncate">
+                      {linkedCharacter.name}
+                      {linkedCharacter.nickname &&
+                        linkedCharacter.nickname.toLowerCase() !==
+                          linkedCharacter.name.toLowerCase() && (
+                          <span className="opacity-50 font-normal text-sm"> "{linkedCharacter.nickname}"</span>
+                        )}
+                    </span>
+                  )}
+                  <div className="flex items-center space-x-2">
+                    <span className="text-xs opacity-50 font-mono">
+                      {currentArticle.wordCount || currentArticle.markdownContent.split(/\s+/).length} words
+                    </span>
+                    <span className="text-xs opacity-40 font-mono">
+                      • Modified {currentArticle.lastModified}
+                    </span>
+                  </div>
+                </div>
               </div>
 
               {/* Action Buttons */}
