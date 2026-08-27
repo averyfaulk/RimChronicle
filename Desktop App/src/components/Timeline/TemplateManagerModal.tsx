@@ -50,6 +50,7 @@ const CATEGORIES: EventCategory[] = [
   "Discovery",
   "Surgery",
   "Colony Life",
+  "Travel",
 ];
 
 const THREAT_LEVELS: ThreatLevel[] = ["Minor", "Moderate", "Major", "Catastrophic"];
@@ -59,6 +60,7 @@ const FIELD_TYPES: { value: TemplateFieldType; label: string }[] = [
   { value: "colonist-multi", label: "Colonists (multi-select)" },
   { value: "faction", label: "Faction (dropdown)" },
   { value: "location", label: "Location (dropdown)" },
+  { value: "route", label: "Route (dropdown)" },
   { value: "slider", label: "Severity slider" },
   { value: "text", label: "Short text" },
   { value: "textarea", label: "Long text" },

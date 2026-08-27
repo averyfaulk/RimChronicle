@@ -17,6 +17,7 @@
 import {
   EventCategory,
   EventTemplate,
+  MapRoute,
   RimWorldDate,
   StoryProject,
   TemplateField,
@@ -26,6 +27,14 @@ import {
   WikiArticle,
 } from "../types";
 import { formatRimWorldDate } from "./downtime";
+import {
+  findRouteById,
+  resolveHazards,
+  applyRouteHazards,
+  hazardsToMarkdown,
+  hazardsToTags,
+  routePlaceholders,
+} from "./routeEngine";
 
 export type TemplateValues = Record<string, string | string[] | number | undefined>;
 
@@ -241,6 +250,34 @@ export const BUILTIN_TEMPLATES: EventTemplate[] = [
       { id: "recruiter", label: "Greeted By", type: "colonist" },
     ],
   },
+  {
+    id: "stencil-travel",
+    name: "Travel",
+    icon: "compass",
+    accent: "cyan",
+    category: "Travel",
+    threatLevel: "Minor",
+    titleTemplate: "Travel to {{destination}} via {{routeName}}",
+    descriptionTemplate:
+      "{{travelers}} traveled from {{origin}} to {{destination}} via **{{routeName}}** on {{date}} ({{travelDays}} days). Complications: {{complications}}/10.\n\n**Known Hazards:**\n{{hazards}}\n\n{{purpose}}",
+    impactTemplate: "The journey reshapes the expedition's readiness and morale.",
+    fields: [
+      { id: "route", label: "Route", type: "route", required: true },
+      { id: "travelers", label: "Traveling Party", type: "colonist-multi" },
+      { id: "purpose", label: "Purpose", type: "text", placeholder: "Expedition for plasteel, trade mission, escape..." },
+      {
+        id: "complications",
+        label: "Complications",
+        type: "slider",
+        sliderMin: 0,
+        sliderMax: 10,
+        sliderUnit: "/10",
+        derivesThreat: true,
+        mapsToIntensity: true,
+        threatThresholds: { minor: 2, moderate: 5, major: 8 },
+      },
+    ],
+  },
 ];
 
 /* ------------------------------------------------------------------ */
@@ -320,6 +357,7 @@ export function renderStencil(
   const wikiLinks: StencilWikiLink[] = [];
   const participants: string[] = [];
   let location = "";
+  let resolvedRoute: MapRoute | null = null;
 
   template.fields.forEach((field) => {
     const raw = values[field.id];
@@ -347,11 +385,41 @@ export function renderStencil(
       const clean = typeof raw === "string" ? raw.trim() : "";
       if (clean && !location) location = clean;
       if (clean) wikiLinks.push({ type: "location", title: clean });
+    } else if (field.type === "route" && typeof raw === "string" && raw.trim()) {
+      const route = findRouteById(project, raw.trim());
+      if (route) {
+        resolvedRoute = route;
+        const srcLoc = project.locations.find((l) => l.id === route!.sourceId);
+        const tgtLoc = project.locations.find((l) => l.id === route!.targetId);
+        if (srcLoc) wikiLinks.push({ type: "location", title: srcLoc.name });
+        if (tgtLoc) {
+          wikiLinks.push({ type: "location", title: tgtLoc.name });
+          if (!location) location = tgtLoc.name;
+        }
+      }
     }
   });
 
   if (!location) {
     location = project.locations[0]?.name || "Colony";
+  }
+
+  // Route hazard integration: inject route placeholders + escalate threat.
+  let extraTags: string[] = [];
+  if (resolvedRoute) {
+    const srcLoc = project.locations.find((l) => l.id === resolvedRoute!.sourceId);
+    const tgtLoc = project.locations.find((l) => l.id === resolvedRoute!.targetId);
+    const originName = srcLoc?.name || "Origin";
+    const destName = tgtLoc?.name || "Destination";
+    location = destName;
+
+    const rp = routePlaceholders(resolvedRoute, originName, destName);
+    Object.entries(rp).forEach(([k, v]) => {
+      plain[k] = v;
+      wiki[k] = v;
+    });
+
+    extraTags = hazardsToTags(resolveHazards(resolvedRoute));
   }
 
   // Threat level from the first deriving slider.
@@ -380,6 +448,12 @@ export function renderStencil(
   } else {
     intensity = threatIntensity(threat);
   }
+
+  // Route hazards may escalate threat beyond slider-derived level.
+  if (resolvedRoute) {
+    threat = applyRouteHazards(threat, resolvedRoute);
+    intensity = Math.max(intensity, threatIntensity(threat));
+  }
   intensity = Math.min(10, Math.max(1, intensity));
 
   const title = fillPlaceholders(template.titleTemplate, plain).trim();
@@ -401,6 +475,7 @@ export function renderStencil(
     narrativeImpact:
       narrativeImpact || "Shifts colonist morale and survival strategy.",
     intensityScore: intensity,
+    ...(extraTags.length > 0 ? { tags: extraTags } : {}),
   };
 
   return { event, wikiLinks };

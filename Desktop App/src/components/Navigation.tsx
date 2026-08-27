@@ -14,6 +14,7 @@ import {
   FileArchive,
   RefreshCw,
   MapPin,
+  Map,
   FolderOpen,
   WifiOff,
   ScrollText,
@@ -89,6 +90,12 @@ export const Navigation: React.FC<NavigationProps> = ({
       label: "Social Web",
       icon: <GitGraph className="w-4 h-4" />,
       badge: project.characters.length,
+    },
+    {
+      id: "map",
+      label: "World Map",
+      icon: <Map className="w-4 h-4" />,
+      badge: project.locations.length,
     },
     {
       id: "timeline",

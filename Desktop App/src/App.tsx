@@ -5,6 +5,7 @@ import { Navigation } from "./components/Navigation";
 import { WelcomeScreen } from "./components/Startup/WelcomeScreen";
 import { WikiManager } from "./components/Wiki/WikiManager";
 import { RelationshipGraph } from "./components/Relationships/RelationshipGraph";
+import { WorldMapView } from "./components/WorldMap/WorldMapView";
 import { ChronicleTimeline } from "./components/Timeline/ChronicleTimeline";
 import { IdeologyPage } from "./components/Ideology/IdeologyPage";
 import { PlotGapAnalyzer } from "./components/PlotAnalyzer/PlotGapAnalyzer";
@@ -185,6 +186,14 @@ const App: React.FC = () => {
         )}
         {activeTab === "network" && (
           <RelationshipGraph
+            project={project}
+            setProject={handleSave}
+            theme={theme}
+            onNavigateToArticle={handleNavigateToArticle}
+          />
+        )}
+        {activeTab === "map" && (
+          <WorldMapView
             project={project}
             setProject={handleSave}
             theme={theme}

@@ -11,6 +11,7 @@ export type TemplateFieldType =
   | "faction" // faction dropdown
   | "location" // location dropdown
   | "slider" // numeric severity slider
+  | "route" // route dropdown (world map)
   | "text" // short text input
   | "textarea"; // multiline text
 
@@ -152,7 +153,8 @@ export type EventCategory =
   | "Tragedy"
   | "Discovery"
   | "Surgery"
-  | "Colony Life";
+  | "Colony Life"
+  | "Travel";
 
 export type ThreatLevel = "Minor" | "Moderate" | "Major" | "Catastrophic";
 
@@ -271,6 +273,13 @@ export interface LocationItem {
   linkedArticleId?: string;
 }
 
+export interface TravelHazard {
+  id: string;
+  label: string;
+  severity: ThreatLevel;   // Minor / Moderate / Major / Catastrophic
+  description?: string;
+}
+
 export interface MapRoute {
   id: string;
   sourceId: string;
@@ -283,6 +292,7 @@ export interface MapRoute {
   travelDaysDropPods: number;
   travelDaysMechanoid: number;
   logisticalHazards: string[];
+  hazards?: TravelHazard[];
   notes?: string;
 }
 
@@ -303,6 +313,7 @@ export interface MapSettings {
   overlayOpacity?: number;
   customTiles?: Record<string, CustomHexTile>; // key: `${q},${r}`
   terrainCostConfig?: TerrainCostConfig;
+  mapSkin?: "world" | "dungeon";
 }
 
 export interface RelicItem {
@@ -532,6 +543,7 @@ export interface TimelineEvent {
 export type ActiveTab =
   | "wiki"
   | "network"
+  | "map"
   | "timeline"
   | "ideology"
   | "plotgap"

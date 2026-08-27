@@ -7,6 +7,7 @@ import {
   CloudRain,
   UserPlus,
   Zap,
+  Compass,
 } from "lucide-react";
 import { ThemeMode } from "../../types";
 
@@ -17,6 +18,7 @@ export const TEMPLATE_ICON_KEYS = [
   "brain",
   "cloud-rain",
   "user-plus",
+  "compass",
 ] as const;
 
 export function TemplateIcon({
@@ -40,6 +42,8 @@ export function TemplateIcon({
       return <CloudRain className={cls} />;
     case "user-plus":
       return <UserPlus className={cls} />;
+    case "compass":
+      return <Compass className={cls} />;
     default:
       return <Zap className={cls} />;
   }

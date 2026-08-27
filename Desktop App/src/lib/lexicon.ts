@@ -185,6 +185,7 @@ const EVENT_CATEGORY_TERMS: Record<EventCategory, TermPair> = {
   Discovery: { rimworld: "Discovery", fantasy: "Discovery" },
   Surgery: { rimworld: "Surgery", fantasy: "Surgery" },
   "Colony Life": { rimworld: "Colony Life", fantasy: "Colony Life" },
+  Travel: { rimworld: "Travel", fantasy: "Journey" },
 };
 
 export function eventCategoryLabel(cat: EventCategory, mode: LexiconMode): string {

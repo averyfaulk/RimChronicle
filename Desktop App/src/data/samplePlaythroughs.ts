@@ -254,6 +254,7 @@ const basePlaythroughProject: StoryProject = {
       type: "Colony Settlement",
       dangerLevel: "Safe",
       hexCoord: { q: 0, r: 0 },
+      position: { x: 50, y: 40 },
       biome: "Glacial Ice Sheet",
       terrainDifficulty: 1.0,
       elevationMeters: 2850,
@@ -269,6 +270,7 @@ const basePlaythroughProject: StoryProject = {
       type: "Ancient Cryptosleep Ruins",
       dangerLevel: "Extreme Hazard",
       hexCoord: { q: 2, r: 3 },
+      position: { x: 75, y: 65 },
       biome: "Glacial Ice Sheet",
       terrainDifficulty: 2.2,
       elevationMeters: 3400,
@@ -284,6 +286,7 @@ const basePlaythroughProject: StoryProject = {
       type: "Mining Outpost",
       dangerLevel: "Dangerous",
       hexCoord: { q: -3, r: 2 },
+      position: { x: 20, y: 30 },
       biome: "Boreal Mountain Forest",
       terrainDifficulty: 1.6,
       elevationMeters: 2100,
@@ -299,6 +302,7 @@ const basePlaythroughProject: StoryProject = {
       type: "Battlefield & War Zone",
       dangerLevel: "Extreme Hazard",
       hexCoord: { q: 1, r: 1 },
+      position: { x: 60, y: 50 },
       biome: "Tundra",
       terrainDifficulty: 1.8,
       elevationMeters: 2400,
@@ -314,6 +318,7 @@ const basePlaythroughProject: StoryProject = {
       type: "Raider Fortress",
       dangerLevel: "Extreme Hazard",
       hexCoord: { q: 4, r: -2 },
+      position: { x: 85, y: 30 },
       biome: "Arid Shrubland",
       terrainDifficulty: 1.4,
       elevationMeters: 1400,
@@ -329,6 +334,7 @@ const basePlaythroughProject: StoryProject = {
       type: "Trading Hub",
       dangerLevel: "Safe",
       hexCoord: { q: -2, r: -3 },
+      position: { x: 25, y: 70 },
       biome: "Temperate Valley",
       terrainDifficulty: 1.1,
       elevationMeters: 1600,
@@ -935,6 +941,11 @@ By the time the twin moons rose over the tundra, Cole had struck a spark into a 
         "Hypothermia Danger: Ambient night temp drops to -38°C through the Iron Pass gorge",
         "Food Supply Demand: Requires minimum 24 packaged survival rations for a 3-person team"
       ],
+      hazards: [
+        { id: "haz-fatigue", label: "Forced March Fatigue", severity: "Moderate", description: "Remote distance (+25% mental break risk without psychite tea)" },
+        { id: "haz-hypothermia", label: "Hypothermia Danger", severity: "Major", description: "Ambient night temp drops to -38°C through the Iron Pass gorge" },
+        { id: "haz-food", label: "Food Supply Demand", severity: "Minor", description: "Requires minimum 24 packaged survival rations for a 3-person team" },
+      ],
       notes: "Crucial supply line for New Valhalla bionic manufacturing plasteel."
     },
     {
@@ -952,6 +963,10 @@ By the time the twin moons rose over the tundra, Cole had struck a spark into a 
         "Extreme Glacial Terrain: Deep ice crevasses require climbing gear",
         "Psychic Drone Resonance: Approaching the vault lowers psychic sensitivity mood by -12"
       ],
+      hazards: [
+        { id: "haz-crevasse", label: "Extreme Glacial Terrain", severity: "Major", description: "Deep ice crevasses require climbing gear" },
+        { id: "haz-psychic", label: "Psychic Drone Resonance", severity: "Moderate", description: "Approaching the vault lowers psychic sensitivity mood by -12" },
+      ],
       notes: "Path to the defoliator crash and ancient cryptosleep vault."
     },
     {
@@ -968,7 +983,10 @@ By the time the twin moons rose over the tundra, Cole had struck a spark into a 
       logisticalHazards: [
         "Gentle valley descent with high trade caravan security",
         "Toll checkpoint at Imperial border"
-      ]
+      ],
+      hazards: [
+        { id: "haz-toll", label: "Imperial Toll Checkpoint", severity: "Minor", description: "Deducts 12% of carried goods at the Imperial border crossing" },
+      ],
     }
   ]
 };

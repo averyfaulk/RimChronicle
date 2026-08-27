@@ -84,7 +84,13 @@ export function listWikis(): WikiSummary[] {
 
 export function loadWiki(id: string): StoryProject | null {
   const found = readStore()[id];
-  return found ? clone(found) : null;
+  if (!found) return null;
+  const project = clone(found);
+  // Ensure new map fields exist on older persisted projects
+  if (!project.mapSettings) project.mapSettings = { mapStyle: "hexGrid", themeTerrain: "temperate", gridCols: 60, gridRows: 45, showHeatmap: false, heatmapType: "all", showRoutes: true, showLabels: true, showCoordinates: false, showFactions: true, mapSkin: "world" };
+  else if (!project.mapSettings.mapSkin) project.mapSettings.mapSkin = "world";
+  if (!project.mapRoutes) project.mapRoutes = [];
+  return project;
 }
 
 export function saveWiki(project: StoryProject): void {
@@ -128,6 +134,8 @@ export function createFreshProject(title: string): StoryProject {
     canonConstraints: [],
     preceptMatrices: [],
     culturalFrictionPoints: [],
+    mapSettings: { mapStyle: "hexGrid", themeTerrain: "temperate", gridCols: 60, gridRows: 45, showHeatmap: false, heatmapType: "all", showRoutes: true, showLabels: true, showCoordinates: false, showFactions: true, mapSkin: "world" },
+    mapRoutes: [],
     lastUpdated: new Date().toISOString(),
   };
 }

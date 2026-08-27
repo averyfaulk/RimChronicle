@@ -273,6 +273,37 @@ export const EventMacroModal: React.FC<EventMacroModalProps> = ({
       );
     }
 
+    if (field.type === "route") {
+      const routes = project.mapRoutes || [];
+      if (routes.length === 0) {
+        return (
+          <p className="text-[11px] italic opacity-60 py-1">
+            No routes defined — create them in the World Map tab first.
+          </p>
+        );
+      }
+      return (
+        <select
+          value={typeof value === "string" ? value : ""}
+          onChange={(e) => setField(field.id, e.target.value)}
+          className={`w-full px-2 py-1.5 rounded-lg outline-none text-xs cursor-pointer ${selectClasses(theme)}`}
+        >
+          <option value="">— Select Route —</option>
+          {routes.map((r) => {
+            const src = project.locations.find((l) => l.id === r.sourceId);
+            const tgt = project.locations.find((l) => l.id === r.targetId);
+            const hazCount = (r.hazards?.length || 0) + (r.logisticalHazards?.length || 0);
+            return (
+              <option key={r.id} value={r.id}>
+                {r.name} ({src?.name || "?"} → {tgt?.name || "?"})
+                {hazCount > 0 ? ` ⚠${hazCount}` : ""}
+              </option>
+            );
+          })}
+        </select>
+      );
+    }
+
     if (field.type === "slider") {
       const num = typeof value === "number" ? value : field.sliderMin ?? 0;
       const min = field.sliderMin ?? 0;

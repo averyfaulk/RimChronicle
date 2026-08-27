@@ -28,6 +28,7 @@ const VALID_CATEGORIES: EventCategory[] = [
   "Discovery",
   "Surgery",
   "Colony Life",
+  "Travel",
 ];
 
 const VALID_THREAT_LEVELS: ThreatLevel[] = ["Minor", "Moderate", "Major", "Catastrophic"];
@@ -37,6 +38,7 @@ const VALID_FIELD_TYPES = [
   "colonist-multi",
   "faction",
   "location",
+  "route",
   "slider",
   "text",
   "textarea",
