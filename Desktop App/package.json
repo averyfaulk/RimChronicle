@@ -2,6 +2,12 @@
   "name": "rimchronicle",
   "private": true,
   "version": "0.0.0",
+  "description": "Storyteller Wiki & Novel Studio — transform RimWorld playthroughs into AI-narrated colony wikis",
+  "author": {
+    "name": "RimChronicle Dev",
+    "email": "dev@rimchronicle.app"
+  },
+  "homepage": "https://github.com/rimchronicle/rimchronicle",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
