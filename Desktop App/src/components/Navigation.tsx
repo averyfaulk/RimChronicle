@@ -18,7 +18,9 @@ import {
   FolderOpen,
   WifiOff,
   ScrollText,
-  Settings
+  Settings,
+  Layers3,
+  Dices
 } from "lucide-react";
 import { ActiveTab, ThemeMode, StoryProject } from "../types";
 import { AIModelPicker } from "./AI/AIModelPicker";
@@ -38,6 +40,8 @@ interface NavigationProps {
   onOpenIngestModal: () => void;
   onExportZip: () => void;
   onOpenLibrary: () => void;
+  onOpenTaxonomy: () => void;
+  onOpenDiceRoller: () => void;
   onResetToSample?: () => void;
 }
 
@@ -54,6 +58,8 @@ export const Navigation: React.FC<NavigationProps> = ({
   onOpenIngestModal,
   onExportZip,
   onOpenLibrary,
+  onOpenTaxonomy,
+  onOpenDiceRoller,
 }) => {
   const lex = useLexicon();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -301,6 +307,39 @@ export const Navigation: React.FC<NavigationProps> = ({
               title="Export Markdown Wiki (.zip, novel manuscript, JSON backup)"
             >
               <Download className="w-4 h-4" />
+            </button>
+
+            {/* Dice Roller — available everywhere */}
+            <button
+              id="btn-dice-roller"
+              onClick={onOpenDiceRoller}
+              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+                theme === "dark"
+                  ? "border-[#25252e] text-zinc-300 hover:bg-[#18181e] hover:text-white"
+                  : theme === "parchment"
+                  ? "border-amber-300 text-stone-700 hover:bg-amber-200/50"
+                  : "border-cyan-900 text-cyan-300 hover:bg-cyan-950/60"
+              }`}
+              title="Roll a polyhedral die (D2–D100)"
+            >
+              <Dices className="w-4 h-4" />
+              <span>Dice Roller</span>
+            </button>
+
+            {/* Worldbuilding & Categories */}
+            <button
+              id="btn-open-taxonomy"
+              onClick={onOpenTaxonomy}
+              className={`p-2 rounded-lg text-xs font-medium border transition-colors ${
+                theme === "dark"
+                  ? "border-[#25252e] text-zinc-300 hover:bg-[#18181e] hover:text-white"
+                  : theme === "parchment"
+                  ? "border-amber-300 text-stone-700 hover:bg-amber-200/50"
+                  : "border-cyan-900 text-cyan-300 hover:bg-cyan-950/60"
+              }`}
+              title="Customize categories, biomes, location types & event categories"
+            >
+              <Layers3 className="w-4 h-4" />
             </button>
 
             {/* Settings Popover: Appearance, AI Mode, Native Lexicon */}

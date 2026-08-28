@@ -36,6 +36,7 @@ import { MarkdownRenderer } from "../Wiki/MarkdownRenderer";
 import { downloadBlob } from "../../lib/zipExporter";
 import { extractCanonViolations, CanonViolation } from "../../lib/canonEngine";
 import { CanonConstraintManagerModal } from "./CanonConstraintManagerModal";
+import { getTaxonomy } from "../../lib/taxonomy";
 
 interface NovelizationStudioProps {
   project: StoryProject;
@@ -606,6 +607,7 @@ export const NovelizationStudio: React.FC<NovelizationStudioProps> = ({
                 content={compiledFullManuscript}
                 lookup={lookup}
                 theme={theme}
+                taxonomy={getTaxonomy(project)}
                 onNavigateToArticle={onNavigateToArticle}
                 canonConstraints={enabledConstraints}
               />
@@ -780,6 +782,7 @@ export const NovelizationStudio: React.FC<NovelizationStudioProps> = ({
                   content={currentChapter.fullChapterMarkdown}
                   lookup={lookup}
                   theme={theme}
+                  taxonomy={getTaxonomy(project)}
                   onNavigateToArticle={onNavigateToArticle}
                   canonConstraints={enabledConstraints}
                 />

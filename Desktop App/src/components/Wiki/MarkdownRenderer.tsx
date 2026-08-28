@@ -1,6 +1,6 @@
 import React from "react";
 import ReactMarkdown from "react-markdown";
-import { CanonConstraint, ThemeMode } from "../../types";
+import { CanonConstraint, ProjectTaxonomy, ThemeMode } from "../../types";
 import { EntityLookup } from "../../lib/wikiParser";
 import { WikiHoverCard } from "./WikiHoverCard";
 import { extractCanonHighlightSpans } from "../../lib/canonEngine";
@@ -9,6 +9,7 @@ interface MarkdownRendererProps {
   content: string;
   lookup: EntityLookup;
   theme: ThemeMode;
+  taxonomy: ProjectTaxonomy;
   onNavigateToArticle: (title: string) => void;
   className?: string;
   canonConstraints?: CanonConstraint[];
@@ -23,6 +24,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
   content,
   lookup,
   theme,
+  taxonomy,
   onNavigateToArticle,
   className = "",
   canonConstraints,
@@ -80,6 +82,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
           linkText={linkText}
           lookup={lookup}
           theme={theme}
+          taxonomy={taxonomy}
           onNavigateToArticle={onNavigateToArticle}
         >
           {linkText}

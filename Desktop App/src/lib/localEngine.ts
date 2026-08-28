@@ -33,6 +33,7 @@ import {
 } from "../types";
 import { buildEntityLookup, computeArticleBacklinks } from "./wikiParser";
 import { parseRimWorldTimestamp } from "./downtime";
+import { isColonyLocationType, getTaxonomy, taxonomyLabel, hasFlag, entryByLabel } from "./taxonomy";
 import { buildCulturalFrictionGaps } from "./preceptEngine";
 
 /* ------------------------------------------------------------------ */
@@ -119,7 +120,7 @@ interface LocalSnippetTemplate {
   id: string;
   /** Solo templates need one colonist, duo templates need two. */
   castSize: 1 | 2;
-  category: EventCategory;
+  category: string; // EventCategory id — customizable via project taxonomy
   threatLevel: ThreatLevel;
   intensityRange: [number, number];
   build: (ctx: { a: DowntimeColonistProfile; b?: DowntimeColonistProfile; location: string }) => {
@@ -133,7 +134,7 @@ const DOWNTIME_TEMPLATES: LocalSnippetTemplate[] = [
   {
     id: "zztt-fire",
     castSize: 1,
-    category: "Colony Life",
+    category: "event-colony-life",
     threatLevel: "Moderate",
     intensityRange: [4, 7],
     build: ({ a, location }) => ({
@@ -145,7 +146,7 @@ const DOWNTIME_TEMPLATES: LocalSnippetTemplate[] = [
   {
     id: "campfire-chat",
     castSize: 2,
-    category: "Social",
+    category: "event-social",
     threatLevel: "Minor",
     intensityRange: [1, 3],
     build: ({ a, b, location }) => ({
@@ -157,7 +158,7 @@ const DOWNTIME_TEMPLATES: LocalSnippetTemplate[] = [
   {
     id: "fridge-raid",
     castSize: 1,
-    category: "Mental Break",
+    category: "event-mental-break",
     threatLevel: "Minor",
     intensityRange: [2, 4],
     build: ({ a }) => ({
@@ -184,7 +185,7 @@ const DOWNTIME_TEMPLATES: LocalSnippetTemplate[] = [
   {
     id: "taming",
     castSize: 1,
-    category: "Colony Life",
+    category: "event-colony-life",
     threatLevel: "Minor",
     intensityRange: [2, 6],
     build: ({ a, location }) => {
@@ -206,7 +207,7 @@ const DOWNTIME_TEMPLATES: LocalSnippetTemplate[] = [
   {
     id: "bionic-ache",
     castSize: 1,
-    category: "Colony Life",
+    category: "event-colony-life",
     threatLevel: "Minor",
     intensityRange: [1, 3],
     build: ({ a }) => {
@@ -221,7 +222,7 @@ const DOWNTIME_TEMPLATES: LocalSnippetTemplate[] = [
   {
     id: "target-practice",
     castSize: 1,
-    category: "Combat",
+    category: "event-combat",
     threatLevel: "Minor",
     intensityRange: [2, 4],
     build: ({ a, location }) => ({
@@ -233,7 +234,7 @@ const DOWNTIME_TEMPLATES: LocalSnippetTemplate[] = [
   {
     id: "sparring-match",
     castSize: 2,
-    category: "Combat",
+    category: "event-combat",
     threatLevel: "Minor",
     intensityRange: [2, 4],
     build: ({ a, b }) => ({
@@ -257,7 +258,7 @@ const DOWNTIME_TEMPLATES: LocalSnippetTemplate[] = [
   {
     id: "repair-day",
     castSize: 1,
-    category: "Colony Life",
+    category: "event-colony-life",
     threatLevel: "Minor",
     intensityRange: [1, 3],
     build: ({ a, location }) => ({
@@ -269,7 +270,7 @@ const DOWNTIME_TEMPLATES: LocalSnippetTemplate[] = [
   {
     id: "night-terrors",
     castSize: 1,
-    category: "Mental Break",
+    category: "event-mental-break",
     threatLevel: "Minor",
     intensityRange: [3, 5],
     build: ({ a }) => ({
@@ -281,7 +282,7 @@ const DOWNTIME_TEMPLATES: LocalSnippetTemplate[] = [
   {
     id: "letter-home",
     castSize: 1,
-    category: "Social",
+    category: "event-social",
     threatLevel: "Minor",
     intensityRange: [1, 2],
     build: ({ a }) => ({
@@ -317,7 +318,7 @@ const DOWNTIME_TEMPLATES: LocalSnippetTemplate[] = [
   {
     id: "crafting-fervor",
     castSize: 1,
-    category: "Colony Life",
+    category: "event-colony-life",
     threatLevel: "Minor",
     intensityRange: [1, 3],
     build: ({ a, location }) => ({
@@ -329,7 +330,7 @@ const DOWNTIME_TEMPLATES: LocalSnippetTemplate[] = [
   {
     id: "raid-drill",
     castSize: 2,
-    category: "Combat",
+    category: "event-combat",
     threatLevel: "Moderate",
     intensityRange: [3, 6],
     build: ({ a, b, location }) => ({
@@ -341,7 +342,7 @@ const DOWNTIME_TEMPLATES: LocalSnippetTemplate[] = [
   {
     id: "mentoring-lesson",
     castSize: 2,
-    category: "Social",
+    category: "event-social",
     threatLevel: "Minor",
     intensityRange: [1, 3],
     build: ({ a, b, location }) => ({
@@ -353,7 +354,7 @@ const DOWNTIME_TEMPLATES: LocalSnippetTemplate[] = [
   {
     id: "kitchen-disaster",
     castSize: 1,
-    category: "Colony Life",
+    category: "event-colony-life",
     threatLevel: "Minor",
     intensityRange: [2, 4],
     build: ({ a, location }) => ({
@@ -365,7 +366,7 @@ const DOWNTIME_TEMPLATES: LocalSnippetTemplate[] = [
   {
     id: "graveside-visit",
     castSize: 1,
-    category: "Mental Break",
+    category: "event-mental-break",
     threatLevel: "Minor",
     intensityRange: [2, 4],
     build: ({ a }) => ({
@@ -401,7 +402,7 @@ const DOWNTIME_TEMPLATES: LocalSnippetTemplate[] = [
   {
     id: "brewing-batch",
     castSize: 1,
-    category: "Colony Life",
+    category: "event-colony-life",
     threatLevel: "Minor",
     intensityRange: [1, 3],
     build: ({ a, location }) => ({
@@ -413,7 +414,7 @@ const DOWNTIME_TEMPLATES: LocalSnippetTemplate[] = [
   {
     id: "prank-war",
     castSize: 2,
-    category: "Social",
+    category: "event-social",
     threatLevel: "Minor",
     intensityRange: [1, 2],
     build: ({ a, b }) => ({
@@ -452,7 +453,7 @@ const DOWNTIME_TEMPLATES: LocalSnippetTemplate[] = [
   {
     id: "gambling-night",
     castSize: 2,
-    category: "Social",
+    category: "event-social",
     threatLevel: "Minor",
     intensityRange: [1, 3],
     build: ({ a, b }) => ({
@@ -464,7 +465,7 @@ const DOWNTIME_TEMPLATES: LocalSnippetTemplate[] = [
   {
     id: "caravan-prep",
     castSize: 2,
-    category: "Colony Life",
+    category: "event-colony-life",
     threatLevel: "Minor",
     intensityRange: [2, 4],
     build: ({ a, b, location }) => ({
@@ -476,7 +477,7 @@ const DOWNTIME_TEMPLATES: LocalSnippetTemplate[] = [
   {
     id: "loyal-shadow",
     castSize: 1,
-    category: "Colony Life",
+    category: "event-colony-life",
     threatLevel: "Minor",
     intensityRange: [1, 2],
     build: ({ a }) => {
@@ -491,7 +492,7 @@ const DOWNTIME_TEMPLATES: LocalSnippetTemplate[] = [
   {
     id: "ice-storm-shelter",
     castSize: 2,
-    category: "Colony Life",
+    category: "event-colony-life",
     threatLevel: "Minor",
     intensityRange: [2, 4],
     build: ({ a, b }) => ({
@@ -514,9 +515,7 @@ export function rollLocalDowntimeSnippets(ctx: LocalRollContext): DowntimeSnippe
   if (count === 0 || ctx.eligibleColonists.length === 0) return [];
 
   // Prefer colony-flavoured locations, fall back to anything on the map.
-  const colonyLocations = ctx.locations.filter((l) =>
-    /colony|settlement|base/i.test(l.type)
-  );
+  const colonyLocations = ctx.locations.filter((l) => isColonyLocationType(l.type));
   const locationPool =
     colonyLocations.length > 0 ? colonyLocations : ctx.locations.length > 0 ? ctx.locations : null;
 
@@ -575,7 +574,7 @@ export interface LocalCrossroadResolution {
   summary: string;
   sceneProse: string;
   outcome: string;
-  category: EventCategory;
+  category: string; // EventCategory id — customizable via project taxonomy
   threatLevel: ThreatLevel;
   moodImpact: string;
   wikiUpdates: { articleTitle: string; updateSummary: string }[];
@@ -622,7 +621,7 @@ export const LOCAL_CROSSROAD_PRESETS: LocalCrossroadPreset[] = [
           "Two hopeful colonists stood in the empty room while {{lead}} weighed their claims on nothing but time. Seniority spoke first on the rim — the oldest bedroll takes the wall. One face fell, one brightened, and the door closed on {{colony}}'s newest private quarters.",
         outcome:
           "The veteran sleeps behind a door at last; the runner-up keeps a stiff smile and a small, patient grudge.",
-        category: "Social",
+        category: "event-social",
         threatLevel: "Minor",
         moodImpact: "-1 mood for the loser's circle; precedent set without shouting.",
         wikiUpdates: [
@@ -638,7 +637,7 @@ export const LOCAL_CROSSROAD_PRESETS: LocalCrossroadPreset[] = [
         sceneProse:
           "{{lead}} held the helmet high while folded slips rattled like dry seeds. The colony crowded in, breath held. When the winning name was read, cheers tangled with groans — and somewhere in the crowd, someone began planning how to trade their luck away next raffle.",
         outcome: "Chance crowned a winner; nobody can argue with a helmet, though several try.",
-        category: "Social",
+        category: "event-social",
         threatLevel: "Minor",
         moodImpact: "+1 mood from the spectacle; fairness performed is fairness half-believed.",
         wikiUpdates: [
@@ -653,7 +652,7 @@ export const LOCAL_CROSSROAD_PRESETS: LocalCrossroadPreset[] = [
         sceneProse:
           "'Nobody gets it,' {{lead}} said, dragging a medical cot through the door. 'Everybody might.' By nightfall the disputed room held sterile cloth, a lamp on a chain, and the quiet dignity of a place prepared for the colony's worst day instead of its pettiest argument.",
         outcome: "No private rooms gained; {{colony}} owns its first real infirmary bed and the moral high ground.",
-        category: "Colony Life",
+        category: "event-colony-life",
         threatLevel: "Minor",
         moodImpact: "Neutral now, +2 later when injury comes knocking; pettiness defused by purpose.",
         wikiUpdates: [
@@ -680,7 +679,7 @@ export const LOCAL_CROSSROAD_PRESETS: LocalCrossroadPreset[] = [
         sceneProse:
           "{{lead}} studied the rota until the candles guttered, then redrew it like a battlefield map. {{grudgeA}} would leave before {{grudgeB}} arrived; not one shared minute remained. The shifts ran longer and lonelier, but the tools stopped being slammed down hard enough to crack handles.",
         outcome: "Peace purchased with efficiency; the colony works around its own wounds, literally.",
-        category: "Colony Life",
+        category: "event-colony-life",
         threatLevel: "Minor",
         moodImpact: "-1 mood from stretched shifts; zero incidents at handoff.",
         wikiUpdates: [
@@ -695,7 +694,7 @@ export const LOCAL_CROSSROAD_PRESETS: LocalCrossroadPreset[] = [
         sceneProse:
           "Three cups were poured. Only two were wanted. {{lead}} planted themselves between {{grudgeA}} and {{grudgeB}}, slid the tea across anyway, and said the magic words: 'Nobody leaves until somebody talks.' The talk started ugly, went quiet, and ended somewhere no one predicted.",
         outcome: "A cold truce at minimum, occasionally the seed of respect — never an apology out loud.",
-        category: "Social",
+        category: "event-social",
         threatLevel: "Minor",
         moodImpact: "+1 mood if it holds; the colony exhales.",
         wikiUpdates: [
@@ -710,7 +709,7 @@ export const LOCAL_CROSSROAD_PRESETS: LocalCrossroadPreset[] = [
         sceneProse:
           "{{lead}} heard the complaints and shrugged them toward the schedule board. Some pressures make diamonds; others make explosions, and there was exactly one way to find out which this was. The first overlapped shift passed in silence sharp enough to draw blood. The second was almost professional.",
         outcome: "Either a working rivalry or a spectacular blowup — resolved by them, witnessed by all.",
-        category: "Social",
+        category: "event-social",
         threatLevel: "Moderate",
         moodImpact: "Volatile: -2 while it burns, +2 pride colony-wide if they sort it themselves.",
         wikiUpdates: [
@@ -737,7 +736,7 @@ export const LOCAL_CROSSROAD_PRESETS: LocalCrossroadPreset[] = [
         sceneProse:
           "It began small: {{bondA}} appearing early to take {{bondB}}'s shift, waving off questions with talk of insomnia. But ledgers read both ways. {{bondB}} counted the stolen chores, understood each one, and let the silence stand — because some thank-yous only work unspoken.",
         outcome: "The debt shrinks one chore at a time; both pretend not to notice, which is the point.",
-        category: "Social",
+        category: "event-social",
         threatLevel: "Minor",
         moodImpact: "+2 mood; quiet loyalty noticed by the whole colony even if never named.",
         wikiUpdates: [
@@ -753,7 +752,7 @@ export const LOCAL_CROSSROAD_PRESETS: LocalCrossroadPreset[] = [
         sceneProse:
           "Spoons paused mid-air. {{bondA}} rose, throat working, and told the table exactly what {{bondB}} had done on the worst day — plainly, completely, without ornament. When it was done, {{bondB}} stared hard at their bowl and muttered that it was nothing anyone else wouldn't have done. Everyone knew better.",
         outcome: "Gratitude made public; the debt is converted into standing, which weighs less.",
-        category: "Social",
+        category: "event-social",
         threatLevel: "Minor",
         moodImpact: "+3 mood colony-wide; witnessing grace does that.",
         wikiUpdates: [
@@ -769,7 +768,7 @@ export const LOCAL_CROSSROAD_PRESETS: LocalCrossroadPreset[] = [
         sceneProse:
           "'Stop,' {{bondB}} said, the moment {{bondA}} tried to raise it again. 'You keep trying to owe me. Friends don't owe.' The word landed heavier than intended — friends, said aloud, in a place where the dead had been friends too. After that neither mentioned it. Neither forgot it either.",
         outcome: "The debt is dissolved by decree; what replaces it has no name yet.",
-        category: "Social",
+        category: "event-social",
         threatLevel: "Minor",
         moodImpact: "+1 mood; a friendship formally acknowledged without ceremony.",
         wikiUpdates: [
@@ -795,7 +794,7 @@ export const LOCAL_CROSSROAD_PRESETS: LocalCrossroadPreset[] = [
         sceneProse:
           "{{lead}} stood where everyone could see the hands tremble slightly, and took the first question. Then the tenth. Some answers were strong. Some admitted not knowing. By the end the room had not been won back so much as shown the man inside the decisions — sweating, certain only about trying.",
         outcome: "Authority survives on honesty; skeptics become watchful allies rather than believers.",
-        category: "Social",
+        category: "event-social",
         threatLevel: "Moderate",
         moodImpact: "+1 net mood; doubt aired beats doubt fermented.",
         wikiUpdates: [
@@ -811,7 +810,7 @@ export const LOCAL_CROSSROAD_PRESETS: LocalCrossroadPreset[] = [
         sceneProse:
           "{{lead}} drew three chairs to the head table and sat in none of them at first. 'One voice got us here,' they said. 'More voices get us further.' The council was sworn in over cold coffee — {{second}} among them — and the colony watched its leader voluntarily shrink their own shadow.",
         outcome: "Decision-making slows but broadens; blame now has multiple addresses.",
-        category: "Social",
+        category: "event-social",
         threatLevel: "Minor",
         moodImpact: "+2 mood from inclusion; a few miss the speed of one mind deciding.",
         wikiUpdates: [
@@ -827,7 +826,7 @@ export const LOCAL_CROSSROAD_PRESETS: LocalCrossroadPreset[] = [
         sceneProse:
           "Rules went up on the wall, lettered in charcoal. Watches doubled. Complaints were invited — once, formally, in writing — and answered point by point in public. {{lead}} did not apologize for {{lastEvent}} and did not blink. Order held. So did the resentment, coiled and patient, beneath it.",
         outcome: "Unity through pressure; the colony functions flawlessly and feels it doing so.",
-        category: "Social",
+        category: "event-social",
         threatLevel: "Moderate",
         moodImpact: "-2 mood under the surface; output up, warmth down.",
         wikiUpdates: [
@@ -853,7 +852,7 @@ export const LOCAL_CROSSROAD_PRESETS: LocalCrossroadPreset[] = [
         sceneProse:
           "The stash sat on the mess table like evidence at trial: foil-wrapped meals, a tin of luxury coffee, painkillers meant for worse days. '{{lead}}' didn't name the owner. The colony's silence did — heads turning, one by one, until they rested on a face going pale. Nobody shouted. That was somehow worse.",
         outcome: "Deterrence achieved; trust limps afterward, keeping one eye on every bunk frame.",
-        category: "Social",
+        category: "event-social",
         threatLevel: "Moderate",
         moodImpact: "-2 mood immediately; -1 lingering suspicion for weeks.",
         wikiUpdates: [
@@ -869,7 +868,7 @@ export const LOCAL_CROSSROAD_PRESETS: LocalCrossroadPreset[] = [
         sceneProse:
           "By morning the cache was gone and nothing was different, except everything was. The owner found the note folded under their pillow and understood two things at once: they had been seen, and they had been spared. They worked twice as hard that week and could not have explained why to anyone.",
         outcome: "Mercy as leverage; dignity preserved, warning delivered, secret kept twice over.",
-        category: "Social",
+        category: "event-social",
         threatLevel: "Minor",
         moodImpact: "Neutral outwardly; +1 from one colonist's fierce, unexplained redemption arc.",
         wikiUpdates: [
@@ -884,7 +883,7 @@ export const LOCAL_CROSSROAD_PRESETS: LocalCrossroadPreset[] = [
         sceneProse:
           "'One box each,' {{lead}} announced, tapping the confiscated stash. 'Fill it with whatever you can't bear to lose. Keep it visible. Keep it honest.' The colony traded glances — some saw freedom, some saw surveillance dressed as generosity. All of them, that night, packed a box.",
         outcome: "Hoarding becomes policy; anxiety drops, along with the warm fiction that everyone shares alike.",
-        category: "Colony Life",
+        category: "event-colony-life",
         threatLevel: "Minor",
         moodImpact: "+1 mood from autonomy; equality ideal officially retired.",
         wikiUpdates: [
@@ -910,7 +909,7 @@ export const LOCAL_CROSSROAD_PRESETS: LocalCrossroadPreset[] = [
         sceneProse:
           "They sat close around the stove, passing pages hand to hand like something fragile. Each letter began with weather or small jokes — the dead lying to spare the living one last time. By the third letter someone was crying, by the sixth someone was laughing, and that was how {{deceased}} managed to comfort {{colony}} one final time.",
         outcome: "Grief processed communally; the letters enter the chronicle in full.",
-        category: "Mental Break",
+        category: "event-mental-break",
         threatLevel: "Minor",
         moodImpact: "+2 mood after the tears dry; absence made present, then bearable.",
         wikiUpdates: [
@@ -926,7 +925,7 @@ export const LOCAL_CROSSROAD_PRESETS: LocalCrossroadPreset[] = [
         sceneProse:
           "{{lead}} weighed the envelopes once, then wrapped them in oilcloth without opening a single flap. Some words belong to the person they were written to, even if that person is unreachable. The archive drawer closed soft as a prayer, and the colony walked away lighter for not knowing.",
         outcome: "The letters rest unread; mystery preserved, intimacy refused, peace chosen.",
-        category: "Social",
+        category: "event-social",
         threatLevel: "Minor",
         moodImpact: "Neutral; a few colonists wonder forever what was in them.",
         wikiUpdates: [
@@ -968,7 +967,7 @@ export const LOCAL_CROSSROAD_PRESETS: LocalCrossroadPreset[] = [
         sceneProse:
           "The terms were simple: go, but I go too. Through the whole task {{lead}} hovered half a step behind {{second}}, hands twitching with swallowed corrections. The job got done clean. Only at the end did {{lead}} realize they'd been holding their breath since the first hour — pride and terror wearing the same face.",
         outcome: "Competence proven under supervision; the mentor learns something about letting go, slowly.",
-        category: "Colony Life",
+        category: "event-colony-life",
         threatLevel: "Moderate",
         moodImpact: "+1 mood; competence recognized, nerves frayed on one side only.",
         wikiUpdates: [
@@ -984,7 +983,7 @@ export const LOCAL_CROSSROAD_PRESETS: LocalCrossroadPreset[] = [
         sceneProse:
           "'Not this time.' Two words, delivered flat, ending the conversation before it started. {{second}} argued experience, skill, right. {{lead}} answered with one word each time: no. That night both stayed awake — one rehearsing arguments already lost, one rehearsing a phone call to nobody about how they'd kept their promise to somebody gone.",
         outcome: "Safety wins, resentment sows; the lesson deferred grows interest.",
-        category: "Social",
+        category: "event-social",
         threatLevel: "Minor",
         moodImpact: "-1 mood; friction between care and autonomy, felt colony-wide in the silence.",
         wikiUpdates: [
@@ -999,7 +998,7 @@ export const LOCAL_CROSSROAD_PRESETS: LocalCrossroadPreset[] = [
         sceneProse:
           "{{lead}} laid the duty roster on the table and turned it around. 'From today, this is yours. Not just the doing — the deciding, including telling yourself no.' {{second}} read the names on the list differently after that: not tasks to win, but people to bring home. Somewhere behind a steady face, {{lead}} finally exhaled.",
         outcome: "Authority transferred wholesale; growth achieved, mentor officially demoted to backup.",
-        category: "Social",
+        category: "event-social",
         threatLevel: "Minor",
         moodImpact: "+2 mood; the colony gains a second decision-maker and loses an excuse.",
         wikiUpdates: [
@@ -1026,7 +1025,7 @@ export const LOCAL_CROSSROAD_PRESETS: LocalCrossroadPreset[] = [
         sceneProse:
           "The paint cans arrived with a note: done by Friday or the room stays half-finished and everyone knows whose fault. {{grudgeA}} rolled walls left-handed while {{grudgeB}} cut in edges right-handed, communicating exclusively through grunts and pointed brushes. By Thursday they had a system. By Friday, accidentally, they had a room — and something adjacent to teamwork.",
         outcome: "Territory erased under fresh color; rivalry downgraded from war to grumbling détente.",
-        category: "Social",
+        category: "event-social",
         threatLevel: "Minor",
         moodImpact: "+1 mood; everyone enjoys the new room, two people enjoy admitting it least.",
         wikiUpdates: [
@@ -1042,7 +1041,7 @@ export const LOCAL_CROSSROAD_PRESETS: LocalCrossroadPreset[] = [
         sceneProse:
           "The bracket went up laminated — best of three, alternating seats, referee mandatory. {{grudgeA}} versus {{grudgeB}} became the colony's Friday theatre. Games ran long and vicious and utterly absorbing; spectators bet dessert portions. Losing still tasted awful. But losing at cards, publicly and by rules, turned out to taste better than losing at everything else.",
         outcome: "Feud channeled into ritual competition; the room fills again with neutral parties.",
-        category: "Social",
+        category: "event-social",
         threatLevel: "Minor",
         moodImpact: "+2 mood colony-wide; spectacle value exceeds tension cost.",
         wikiUpdates: [
@@ -1057,7 +1056,7 @@ export const LOCAL_CROSSROAD_PRESETS: LocalCrossroadPreset[] = [
         sceneProse:
           "Overnight, {{lead}} had the furniture carried off to four different buildings — the chess set to the greenhouse bench, cards to the storeroom shelf. The old room became overflow dining, all long neutral tables. {{grudgeA}} and {{grudgeB}} now eat at random assigned seats like everyone else, glaring across soup at whoever happens to be there.",
         outcome: "The map that fed the feud is destroyed; conflict persists, but homeless.",
-        category: "Colony Life",
+        category: "event-colony-life",
         threatLevel: "Minor",
         moodImpact: "-1 mood from lost traditions; +1 from the absurd democracy of assigned seating.",
         wikiUpdates: [
@@ -1083,7 +1082,7 @@ export const LOCAL_CROSSROAD_PRESETS: LocalCrossroadPreset[] = [
         sceneProse:
           "For one evening the ration scale lied generously. Someone played music that wasn't entirely on key, {{second}} told the story everyone had heard before and everyone demanded again, and for a few hours {{colony}} was less a survival outpost than a strange little village that happened to be on the wrong planet. The stores dipped. Nobody regretted it out loud.",
         outcome: "Morale spikes sharply; a measurable dent in reserves and a memory worth more.",
-        category: "Social",
+        category: "event-social",
         threatLevel: "Minor",
         moodImpact: "+4 mood for days after; the ledger weeps quietly.",
         wikiUpdates: [
@@ -1099,7 +1098,7 @@ export const LOCAL_CROSSROAD_PRESETS: LocalCrossroadPreset[] = [
         sceneProse:
           "{{lead}} walked the freezer rows with a chalk stub, dating each crate like planting seeds in reverse. 'Winter isn't a season here,' they said, sealing the last lid. 'It's a schedule.' The feast proposal died without a vote. That night dinner was nutrient paste again — dependable, joyless, and enough.",
         outcome: "Security maximized; the colony eats well in a future it believes in slightly less each day.",
-        category: "Colony Life",
+        category: "event-colony-life",
         threatLevel: "Minor",
         moodImpact: "-2 mood now, priceless later; hope deferred is hope preserved, allegedly.",
         wikiUpdates: [
@@ -1114,7 +1113,7 @@ export const LOCAL_CROSSROAD_PRESETS: LocalCrossroadPreset[] = [
         sceneProse:
           "Each cook produced exactly one fine thing and the meal was, technically, a feast — seven dishes spread thin across forty appetites. It worked the way compromises do: nobody was fully happy, nobody was wronged, and {{second}}'s spiced rice was universally declared the reason compromise exists at all.",
         outcome: "Small morale lift, small store dent; everyone practices the art of enough.",
-        category: "Colony Life",
+        category: "event-colony-life",
         threatLevel: "Minor",
         moodImpact: "+1 mood; satisfaction rationed proportionally.",
         wikiUpdates: [
@@ -1140,7 +1139,7 @@ export const LOCAL_CROSSROAD_PRESETS: LocalCrossroadPreset[] = [
         sceneProse:
           "The half-rota went up with {{second}}'s name in careful small print: mornings only, no lifting past twenty kilos, mandatory sit-down breaks. {{second}} called it a participation trophy for healing. Then took it, because half of the work you love beats all of watching someone else do it.",
         outcome: "Recovery continues under load; pride salvaged through partial purpose.",
-        category: "Colony Life",
+        category: "event-colony-life",
         threatLevel: "Minor",
         moodImpact: "+1 mood; usefulness is the best medicine with actual medicine second.",
         wikiUpdates: [
@@ -1156,7 +1155,7 @@ export const LOCAL_CROSSROAD_PRESETS: LocalCrossroadPreset[] = [
         sceneProse:
           "The order was delivered with soup and zero sympathy for appeals. {{second}} protested in increasingly creative ways for two days, then surrendered to a stack of salvaged paperbacks and the discovery that the colony kept functioning — which was either humbling or liberating depending on the hour.",
         outcome: "Full recovery guaranteed at the price of a fortnight's frustration.",
-        category: "Mental Break",
+        category: "event-mental-break",
         threatLevel: "Minor",
         moodImpact: "-1 mood for the patient; +1 relief for everyone who feared the alternative.",
         wikiUpdates: [
@@ -1171,7 +1170,7 @@ export const LOCAL_CROSSROAD_PRESETS: LocalCrossroadPreset[] = [
         sceneProse:
           "Nobody said 'we'll be watching you.' Everybody did. {{second}} hauled the first load slow, out of wisdom or performance, and the colony pretended not to count repetitions. The wink of it — being cared for by an entire settlement pretending not to — was almost worth the injury.",
         outcome: "Autonomy honored; safety outsourced to everyone's peripheral vision.",
-        category: "Social",
+        category: "event-social",
         threatLevel: "Moderate",
         moodImpact: "+2 mood from the conspiracy of care; risk accepted knowingly.",
         wikiUpdates: [
@@ -1197,7 +1196,7 @@ export const LOCAL_CROSSROAD_PRESETS: LocalCrossroadPreset[] = [
         sceneProse:
           "{{bondA}} got good at changing the subject. Got better at smiling around it. Nights were harder — the scheme replaying in permutations, each one ending badly. Loyalty, it turned out, was less a shield than a stone carried in one pocket, checked constantly, never put down.",
         outcome: "Trust preserved; the burden integrates into {{bondA}}'s posture, sleep, and patience.",
-        category: "Mental Break",
+        category: "event-mental-break",
         threatLevel: "Minor",
         moodImpact: "-1 mood localized to {{bondA}}; integrity intact, rest not.",
         wikiUpdates: [
@@ -1212,7 +1211,7 @@ export const LOCAL_CROSSROAD_PRESETS: LocalCrossroadPreset[] = [
         sceneProse:
           "They walked the perimeter twice before {{bondA}} finally said the plan's name out loud — just the two of them, wind covering the worst of it. {{bondB}} defended each step; {{bondA}} had spent weeks finding every hole. It ended not with surrender but revision: smaller, saner, survivable. And still secret. That part mattered to both.",
         outcome: "Scheme defused inside the circle of trust; friendship stress-tested and holding.",
-        category: "Social",
+        category: "event-social",
         threatLevel: "Minor",
         moodImpact: "+1 mood; the colony never knows how close it came.",
         wikiUpdates: [
@@ -1227,7 +1226,7 @@ export const LOCAL_CROSSROAD_PRESETS: LocalCrossroadPreset[] = [
         sceneProse:
           "The confession to {{lead}} took ninety seconds and cost years. {{lead}} listened without interrupting, then asked only: 'And you're telling me because?' — 'Because if it goes wrong, I bury them too.' Later, {{bondB}} looked at {{bondA}} across the mess and knew instantly. Some debts are paid in friendship. This one was paid with it.",
         outcome: "Danger averted through betrayal; the bond survives or doesn't based on one conversation neither wants.",
-        category: "Social",
+        category: "event-social",
         threatLevel: "Moderate",
         moodImpact: "-2 mood from the rupture; safety purchased at visible cost.",
         wikiUpdates: [
@@ -1254,7 +1253,7 @@ export const LOCAL_CROSSROAD_PRESETS: LocalCrossroadPreset[] = [
         sceneProse:
           "The rule was spoken once — say it here or bury it forever. Then the floodgates: noise complaints curdling into old betrayals, chore rotas into accusations nobody had dared voice. {{lead}} held the line and the silence between outbursts. By midnight the air was scorched clean, and someone was laughing at something that would have started a fistfight a month ago.",
         outcome: "Catharsis with bruises; truths surfaced that can never be re-packed.",
-        category: "Social",
+        category: "event-social",
         threatLevel: "Moderate",
         moodImpact: "-2 during, +3 after; pressure released beats pressure stored.",
         wikiUpdates: [
@@ -1269,7 +1268,7 @@ export const LOCAL_CROSSROAD_PRESETS: LocalCrossroadPreset[] = [
         sceneProse:
           "The slips fluttered into the bowl one at a time, {{lead}} reading each in the same level voice: 'Someone feels the watch rotation is unfair.' 'Someone misses food that isn't paste.' Anonymity made some confessions brave and some cowardly, which is anonymous speech generally. Still — the colony heard itself clearly for the first time in months.",
         outcome: "Truth extracted at lower temperature; a few authors identified by phrasing anyway.",
-        category: "Social",
+        category: "event-social",
         threatLevel: "Minor",
         moodImpact: "+2 mood; issues named, nobody lynched.",
         wikiUpdates: [
@@ -1284,7 +1283,7 @@ export const LOCAL_CROSSROAD_PRESETS: LocalCrossroadPreset[] = [
         sceneProse:
           "{{lead}} rose before the fire and did the unexpected: spoke first, listing the colony's tensions like inventory — 'the rota resentment, the bunk jealousy, whatever it is nobody will say about {{lastEvent}}' — and claimed responsibility for resolving each. It wasn't democracy. It was leadership with the mask off, and it landed heavy in the dark.",
         outcome: "Speed over process; tensions acknowledged centrally, resolution promised on one name.",
-        category: "Social",
+        category: "event-social",
         threatLevel: "Minor",
         moodImpact: "+1 mood from being seen; +1 skepticism about follow-through, refundable later.",
         wikiUpdates: [
@@ -1309,7 +1308,7 @@ export const LOCAL_CROSSROAD_PRESETS: LocalCrossroadPreset[] = [
         sceneProse:
           "They faced the ridge where the sun went down and read the names like coordinates. Living settlers got smiles and shoulder-claps. Then the older names — and when the reader reached {{deceased}}, nobody hurried. The silence stretched full rather than empty, which is the trick grief learns late.",
         outcome: "Memory given form and volume; newcomers learn the colony's true roster includes ghosts.",
-        category: "Social",
+        category: "event-social",
         threatLevel: "Minor",
         moodImpact: "+2 mood; sorrow shared at fixed dosage.",
         wikiUpdates: [
@@ -1325,7 +1324,7 @@ export const LOCAL_CROSSROAD_PRESETS: LocalCrossroadPreset[] = [
         sceneProse:
           "{{lead}} announced no speeches, just a workday with a difference: every task dedicated aloud to a name. The greenhouse roof got finished in record time under two dozen quiet dedications. Sweat as sacrament. By dusk the colony stood back from something repaired, expanded, permanent — the only kind of memorial that can't crumble into sentiment.",
         outcome: "Legacy expressed structurally; the dead commemorated in timber, steel, and sore muscles.",
-        category: "Colony Life",
+        category: "event-colony-life",
         threatLevel: "Minor",
         moodImpact: "+2 mood; purpose is grief's best interpreter.",
         wikiUpdates: [
@@ -1340,7 +1339,7 @@ export const LOCAL_CROSSROAD_PRESETS: LocalCrossroadPreset[] = [
         sceneProse:
           "'We honor them by living forward,' {{lead}} said, and put the whole colony on tomorrow's tasks. Most agreed. A few walked the perimeter fence that evening anyway, taking their own private attendance of the absent. Both things were true at once: the future mattered, and so did the ones who weren't in it.",
         outcome: "Tradition skipped; grief privatized, momentum preserved.",
-        category: "Colony Life",
+        category: "event-colony-life",
         threatLevel: "Minor",
         moodImpact: "Neutral headline; ±1 depending on who needed the ceremony and didn't get it.",
         wikiUpdates: [
@@ -1422,7 +1421,7 @@ export function buildLocalCrossroadDraft(
   timelineEvent: {
     title: string;
     timestamp: string;
-    category: EventCategory;
+    category: string; // EventCategory id — customizable via project taxonomy
     threatLevel: ThreatLevel;
     participants: string[];
     location: string;
@@ -1438,7 +1437,7 @@ export function buildLocalCrossroadDraft(
   const lead = namedChars[0]?.name || "the colony leader";
   const second = namedChars[1]?.name;
   const third = namedChars[2]?.name || second || lead;
-  const colonyName = project.locations.find((l) => /colony|settlement/i.test(l.type))?.name || project.title;
+  const colonyName = project.locations.find((l) => isColonyLocationType(l.type))?.name || project.title;
 
   // Canon-derived pairs: strongest grudge and warmest bond among known characters.
   const grudgeBond = findExtremeBond(project, "lowest");
@@ -1518,7 +1517,7 @@ export function presetToScenario(
     triggerConditions: preset.triggerConditions,
     keyParticipants: [],
     threatLevel: "Moderate",
-    category: "Colony Life",
+    category: "event-colony-life",
     moodImpact: "",
     storyHook: preset.storyHook
   };
@@ -1540,7 +1539,10 @@ export function buildLocalColonySnapshot(project: StoryProject): {
   const heavyHits = recent.filter(
     (e) => e.threatLevel === "Major" || e.threatLevel === "Catastrophic"
   ).length;
-  const socialBeats = recent.filter((e) => e.category === "Social").length;
+  const tax = getTaxonomy(project);
+  const socialBeats = recent.filter((e) =>
+    hasFlag(entryByLabel(tax.eventCategories, e.category), "social-mood")
+  ).length;
 
   const moodAverage =
     heavyHits >= 3
@@ -1661,11 +1663,13 @@ function eventHazardEvidence(project: StoryProject, event: TimelineEvent): strin
     (l) => l.name.trim().toLowerCase() === event.location.trim().toLowerCase()
   );
   if (location) {
+    const hazardBiome = taxonomyLabel(getTaxonomy(project).biomes, location.biome || "");
+    const hazardType = taxonomyLabel(getTaxonomy(project).locationTypes, location.type);
     if (location.dangerLevel === "Extreme Hazard") {
       return `"${location.name}" is flagged Extreme Hazard`;
     }
-    if (HAZARD_PATTERN.test(`${location.biome || ""} ${location.type} ${location.description}`)) {
-      return `located in hazardous "${location.biome || location.type}" terrain`;
+    if (HAZARD_PATTERN.test(`${hazardBiome} ${hazardType} ${location.description}`)) {
+      return `located in hazardous "${hazardBiome || hazardType}" terrain`;
     }
   }
   return null;

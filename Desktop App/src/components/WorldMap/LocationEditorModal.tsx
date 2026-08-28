@@ -2,13 +2,12 @@ import React, { useState } from "react";
 import { X, Save, ExternalLink, MapPin } from "lucide-react";
 import {
   LocationItem,
-  LocationType,
-  BiomeType,
   StoryProject,
   ThemeMode,
   WikiArticle,
 } from "../../types";
 import { selectClasses } from "../../lib/uiTheme";
+import { getTaxonomy, hasFlag, taxonomyLabel } from "../../lib/taxonomy";
 
 interface LocationEditorModalProps {
   project: StoryProject;
@@ -20,30 +19,6 @@ interface LocationEditorModalProps {
   onNavigateToArticle: (title: string) => void;
 }
 
-const LOCATION_TYPES: LocationType[] = [
-  "Colony Settlement",
-  "Mining Outpost",
-  "Battlefield & War Zone",
-  "Ancient Cryptosleep Ruins",
-  "Resource Deposit",
-  "Psychic Hotspot",
-  "Crashed Ship Hull",
-  "Trading Hub",
-  "Tribal Camp",
-  "Raider Fortress",
-];
-
-const BIOMES: BiomeType[] = [
-  "Glacial Ice Sheet",
-  "Tundra",
-  "Boreal Mountain Forest",
-  "Temperate Valley",
-  "Arid Shrubland",
-  "Desert Badlands",
-  "Toxic Swampland",
-  "Volcanic Ridge",
-];
-
 export const LocationEditorModal: React.FC<LocationEditorModalProps> = ({
   project,
   setProject,
@@ -53,12 +28,22 @@ export const LocationEditorModal: React.FC<LocationEditorModalProps> = ({
   onSaved,
   onNavigateToArticle,
 }) => {
+  const tax = getTaxonomy(project);
+  const typeOptions = tax.locationTypes;
+  const biomeOptions = tax.biomes;
+  const colonyId =
+    typeOptions.find((t) => hasFlag(t, "colony-type"))?.id || "loc-colony";
+  const locationCatId =
+    tax.articleCategories.find((c) => hasFlag(c, "is-location"))?.id || "category-locations";
+  const typeLabel = (v: string) => taxonomyLabel(typeOptions, v);
+  const biomeLabel = (v: string) => taxonomyLabel(biomeOptions, v);
+
   const [name, setName] = useState(location?.name || "");
-  const [type, setType] = useState<LocationType>((location?.type as LocationType) || "Colony Settlement");
+  const [type, setType] = useState<string>(location?.type || colonyId);
   const [dangerLevel, setDangerLevel] = useState<"Safe" | "Dangerous" | "Extreme Hazard">(
     location?.dangerLevel || "Safe"
   );
-  const [biome, setBiome] = useState<BiomeType | "">(location?.biome || "");
+  const [biome, setBiome] = useState<string>(location?.biome || "");
   const [controllingFaction, setControllingFaction] = useState(location?.controllingFaction || "");
   const [description, setDescription] = useState(location?.description || "");
   const [createArticle, setCreateArticle] = useState(!location);
@@ -106,16 +91,18 @@ export const LocationEditorModal: React.FC<LocationEditorModalProps> = ({
       const updatedArticle: WikiArticle = {
         id: existingIdx >= 0 ? wikiArticles[existingIdx].id : `art-${Date.now().toString(36)}`,
         title: articleTitle,
-        category: "Locations",
-        tags: [type, biome, dangerLevel].filter(Boolean) as string[],
+        category: locationCatId,
+        tags: [typeLabel(type), biome ? biomeLabel(biome) : "", dangerLevel]
+          .filter(Boolean)
+          .filter((x) => x && typeof x === "string") as string[],
         markdownContent: articleContent,
         createdAt: existingIdx >= 0 ? wikiArticles[existingIdx].createdAt : new Date().toISOString().split("T")[0],
         lastModified: new Date().toISOString().split("T")[0],
         wordCount: articleContent.split(/\s+/).length,
         infoboxData: {
-          Type: type,
+          Type: typeLabel(type),
           "Danger Level": dangerLevel,
-          ...(biome ? { Biome: biome } : {}),
+          ...(biome ? { Biome: biomeLabel(biome) } : {}),
           ...(controllingFaction ? { "Controlling Faction": controllingFaction } : {}),
         },
       };
@@ -184,11 +171,11 @@ export const LocationEditorModal: React.FC<LocationEditorModalProps> = ({
             <label className="text-[10px] font-mono opacity-60 uppercase block mb-1">Type</label>
             <select
               value={type}
-              onChange={(e) => setType(e.target.value as LocationType)}
+              onChange={(e) => setType(e.target.value)}
               className={`w-full px-2 py-1.5 rounded-lg outline-none text-xs cursor-pointer ${selectClasses(theme)}`}
             >
-              {LOCATION_TYPES.map((t) => (
-                <option key={t} value={t}>{t}</option>
+              {typeOptions.map((t) => (
+                <option key={t.id} value={t.id}>{t.label}</option>
               ))}
             </select>
           </div>
@@ -212,12 +199,12 @@ export const LocationEditorModal: React.FC<LocationEditorModalProps> = ({
             <label className="text-[10px] font-mono opacity-60 uppercase block mb-1">Biome</label>
             <select
               value={biome}
-              onChange={(e) => setBiome(e.target.value as BiomeType | "")}
+              onChange={(e) => setBiome(e.target.value)}
               className={`w-full px-2 py-1.5 rounded-lg outline-none text-xs cursor-pointer ${selectClasses(theme)}`}
             >
               <option value="">— None —</option>
-              {BIOMES.map((b) => (
-                <option key={b} value={b}>{b}</option>
+              {biomeOptions.map((b) => (
+                <option key={b.id} value={b.id}>{b.label}</option>
               ))}
             </select>
           </div>

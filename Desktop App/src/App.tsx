@@ -12,6 +12,8 @@ import { PlotGapAnalyzer } from "./components/PlotAnalyzer/PlotGapAnalyzer";
 import { NovelizationStudio } from "./components/Novel/NovelizationStudio";
 import { ChroniclerBot } from "./components/Archivist/ChroniclerBot";
 import { LogIngestionModal } from "./components/Ingest/LogIngestionModal";
+import { TaxonomyManagerModal } from "./components/Worldbuilding/TaxonomyManagerModal";
+import { DiceRollerModal } from "./components/DiceRoller/DiceRollerModal";
 import { buildEntityLookup, EntityLookup } from "./lib/wikiParser";
 import { applyModePreset, migrateProjectSlots } from "./lib/attributeSlots";
 import { exportProjectToMarkdownZip, downloadBlob } from "./lib/zipExporter";
@@ -36,6 +38,8 @@ const App: React.FC = () => {
   const [lexiconMode, setLexiconMode] = useState<LexiconMode>(() => loadLexiconMode());
   const [showLibrary, setShowLibrary] = useState(false);
   const [ingestOpen, setIngestOpen] = useState(false);
+  const [taxonomyOpen, setTaxonomyOpen] = useState(false);
+  const [diceOpen, setDiceOpen] = useState(false);
   const [selectedArticleId, setSelectedArticleId] = useState<string | undefined>(undefined);
   const [wikis, setWikis] = useState<WikiSummary[]>([]);
 
@@ -170,6 +174,8 @@ const App: React.FC = () => {
         onOpenIngestModal={() => setIngestOpen(true)}
         onExportZip={handleExportZip}
         onOpenLibrary={() => setShowLibrary(true)}
+        onOpenTaxonomy={() => setTaxonomyOpen(true)}
+        onOpenDiceRoller={() => setDiceOpen(true)}
       />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -249,6 +255,21 @@ const App: React.FC = () => {
         setProject={handleSave}
         theme={theme}
         isAiMode={isAiMode}
+      />
+
+      {taxonomyOpen && (
+        <TaxonomyManagerModal
+          project={project}
+          setProject={handleSave}
+          theme={theme}
+          onClose={() => setTaxonomyOpen(false)}
+        />
+      )}
+
+      <DiceRollerModal
+        isOpen={diceOpen}
+        onClose={() => setDiceOpen(false)}
+        theme={theme}
       />
 
       {showLibrary && (

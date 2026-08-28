@@ -16,6 +16,7 @@ import {
 import { ThemeMode, StoryProject } from "../../types";
 import { EntityLookup } from "../../lib/wikiParser";
 import { MarkdownRenderer } from "../Wiki/MarkdownRenderer";
+import { getTaxonomy, taxonomyLabel } from "../../lib/taxonomy";
 
 interface ChroniclerBotProps {
   project: StoryProject;
@@ -85,7 +86,7 @@ export const ChroniclerBot: React.FC<ChroniclerBotProps> = ({
             relationships: project.relationships,
             recentArticles: project.wikiArticles.map((a) => ({
               title: a.title,
-              category: a.category,
+              category: taxonomyLabel(getTaxonomy(project).articleCategories, a.category),
               summary: a.markdownContent.slice(0, 150),
             })),
           },
@@ -245,6 +246,7 @@ export const ChroniclerBot: React.FC<ChroniclerBotProps> = ({
                     content={msg.text}
                     lookup={lookup}
                     theme={theme}
+                    taxonomy={getTaxonomy(project)}
                     onNavigateToArticle={onNavigateToArticle}
                   />
                 </div>

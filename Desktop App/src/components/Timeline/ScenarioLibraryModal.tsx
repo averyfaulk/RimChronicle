@@ -9,10 +9,9 @@ import {
   Upload,
   X
 } from "lucide-react";
-import { EventCategory, ThemeMode, ThreatLevel } from "../../types";
+import { ThemeMode, ThreatLevel } from "../../types";
 import { LocalCrossroadPreset } from "../../lib/localEngine";
 import { selectClasses } from "../../lib/uiTheme";
-import { useLexicon } from "../../lib/lexicon";
 import {
   deleteCustomScenario,
   loadCustomScenarios,
@@ -23,6 +22,7 @@ import {
 
 interface ScenarioLibraryModalProps {
   theme: ThemeMode;
+  categoryOptions: { id: string; label: string }[];
   onClose: () => void;
   /** Called after any library mutation so parents can refresh their deck. */
   onSaved: () => void;
@@ -34,7 +34,7 @@ interface ResolutionFormState {
   summary: string;
   sceneProse: string;
   outcome: string;
-  category: EventCategory;
+  category: string; // EventCategory id — customizable via project taxonomy
   threatLevel: ThreatLevel;
   moodImpact: string;
   wikiUpdates: { articleTitle: string; updateSummary: string }[];
@@ -48,18 +48,6 @@ interface ScenarioFormState {
   resolutions: ResolutionFormState[];
 }
 
-const CATEGORIES: EventCategory[] = [
-  "Social",
-  "Colony Life",
-  "Mental Break",
-  "Miracle",
-  "Discovery",
-  "Combat",
-  "Quest",
-  "Tragedy",
-  "Surgery"
-];
-
 /** Offline-safe design rule: scenario resolutions never claim game events. */
 const THREAT_LEVELS: ThreatLevel[] = ["Minor", "Moderate"];
 
@@ -69,7 +57,7 @@ const EMPTY_RESOLUTION: ResolutionFormState = {
   summary: "",
   sceneProse: "",
   outcome: "",
-  category: "Social",
+  category: "event-social",
   threatLevel: "Minor",
   moodImpact: "",
   wikiUpdates: []
@@ -85,10 +73,10 @@ const EMPTY_FORM: ScenarioFormState = {
 
 export const ScenarioLibraryModal: React.FC<ScenarioLibraryModalProps> = ({
   theme,
+  categoryOptions,
   onClose,
   onSaved,
 }) => {
-  const lex = useLexicon();
   const [scenarios, setScenarios] = useState<LocalCrossroadPreset[]>(() =>
     loadCustomScenarios()
   );
@@ -524,16 +512,19 @@ export const ScenarioLibraryModal: React.FC<ScenarioLibraryModalProps> = ({
 
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
                       <select
-                        value={res.category}
+                        value={
+                          categoryOptions.find((o) => o.label === res.category)?.id ||
+                          res.category
+                        }
                         onChange={(e) =>
-                          updateResolution(idx, { category: e.target.value as EventCategory })
+                          updateResolution(idx, { category: e.target.value })
                         }
                         className={`px-2.5 py-1.5 rounded-lg text-xs outline-none cursor-pointer ${selectClasses(theme)}`}
                         title="Event category"
                       >
-                        {CATEGORIES.map((c) => (
-                          <option key={c} value={c}>
-                            {lex.evCat(c)}
+                        {categoryOptions.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.label}
                           </option>
                         ))}
                       </select>

@@ -176,6 +176,52 @@ export function buildEntityLookup(
   return lookup;
 }
 
+/** Map a parent article id (or "" for top level) to its direct children. */
+export function getChildrenMap(articles: WikiArticle[]): Map<string, WikiArticle[]> {
+  const childrenMap = new Map<string, WikiArticle[]>();
+  articles.forEach((child) => {
+    const key = child.parentId || "";
+    const list = childrenMap.get(key) || [];
+    list.push(child);
+    childrenMap.set(key, list);
+  });
+  return childrenMap;
+}
+
+/**
+ * Ancestor chain from the article up to the root, oldest ancestor first.
+ * Returns [] when the article is top-level or not found.
+ */
+export function getAncestorChain(articles: WikiArticle[], articleId?: string): WikiArticle[] {
+  const chain: WikiArticle[] = [];
+  if (!articleId) return chain;
+  const byId = new Map(articles.map((a) => [a.id, a]));
+  let cursor = byId.get(articleId);
+  const seen = new Set<string>();
+  while (cursor?.parentId && !seen.has(cursor.parentId)) {
+    seen.add(cursor.parentId);
+    const parent = byId.get(cursor.parentId);
+    if (!parent) break;
+    chain.unshift(parent);
+    cursor = parent;
+  }
+  return chain;
+}
+
+/** All descendant ids (children, grandchildren, ...) of an article. Used to guard reparenting cycles. */
+export function getDescendantIds(articles: WikiArticle[], articleId: string): Set<string> {
+  const ids = new Set<string>();
+  const childrenMap = getChildrenMap(articles);
+  const stack = [...(childrenMap.get(articleId) || [])];
+  while (stack.length > 0) {
+    const next = stack.pop()!;
+    if (ids.has(next.id)) continue;
+    ids.add(next.id);
+    stack.push(...(childrenMap.get(next.id) || []));
+  }
+  return ids;
+}
+
 // Find entity details by name string
 export function findEntityByLinkText(
   linkText: string,

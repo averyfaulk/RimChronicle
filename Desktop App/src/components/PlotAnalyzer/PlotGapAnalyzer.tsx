@@ -29,6 +29,7 @@ import {
 import { runStaticNarrativeScan } from "../../lib/localEngine";
 import { buildCulturalFrictionGaps } from "../../lib/preceptEngine";
 import { formatRimWorldDate, getCurrentTimelineDate } from "../../lib/downtime";
+import { getTaxonomy } from "../../lib/taxonomy";
 
 interface PlotGapAnalyzerProps {
   project: StoryProject;
@@ -81,6 +82,7 @@ export const PlotGapAnalyzer: React.FC<PlotGapAnalyzerProps> = ({
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
+            taxonomy: getTaxonomy(project),
             characters: project.characters,
             events: project.timelineEvents,
             relationships: project.relationships,
@@ -183,6 +185,7 @@ export const PlotGapAnalyzer: React.FC<PlotGapAnalyzerProps> = ({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          taxonomy: getTaxonomy(project),
           gapTitle: gap.title,
           explanation: gap.explanation,
           affectedEntities: gap.affectedEntities,

@@ -8,7 +8,7 @@
  * custom list. Supports JSON export/import for backup and sharing.
  */
 
-import { EventCategory, EventTemplate, ThreatLevel } from "../types";
+import { EventTemplate, ThreatLevel } from "../types";
 import { BUILTIN_TEMPLATES } from "./templateEngine";
 
 const STORAGE_KEY = "rimchronicle_event_templates";
@@ -17,19 +17,6 @@ export interface TemplateExportFile {
   version: 1;
   templates: EventTemplate[];
 }
-
-const VALID_CATEGORIES: EventCategory[] = [
-  "Combat",
-  "Social",
-  "Mental Break",
-  "Miracle",
-  "Quest",
-  "Tragedy",
-  "Discovery",
-  "Surgery",
-  "Colony Life",
-  "Travel",
-];
 
 const VALID_THREAT_LEVELS: ThreatLevel[] = ["Minor", "Moderate", "Major", "Catastrophic"];
 
@@ -62,10 +49,7 @@ export function isValidTemplateShape(x: unknown): x is EventTemplate {
   const t = x as Record<string, unknown>;
 
   if (!isNonEmptyString(t.id) || !isNonEmptyString(t.name)) return false;
-  if (
-    !isNonEmptyString(t.category) ||
-    !VALID_CATEGORIES.includes(t.category as EventCategory)
-  ) {
+  if (!isNonEmptyString(t.category)) {
     return false;
   }
   if (

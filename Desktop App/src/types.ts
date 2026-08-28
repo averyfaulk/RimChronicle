@@ -37,7 +37,7 @@ export interface EventTemplate {
   name: string; // "Raid"
   icon?: string; // lucide icon key (see components/Timeline/TemplateIcon.tsx)
   accent?: string; // color token: red/emerald/blue/amber/cyan/violet
-  category: EventCategory;
+  category: string; // EventCategory id — customizable via project taxonomy
   threatLevel: ThreatLevel; // base level; may be overridden by a deriving slider
   titleTemplate: string; // "{{faction}} Raid on {{location}}"
   descriptionTemplate: string; // markdown with {{field}} placeholders + [[auto-links]]
@@ -55,10 +55,45 @@ export type ArticleCategory =
   | "Lore"
   | "Battles";
 
+/**
+ * A single user-customizable worldbuilding entry (article category, biome,
+ * location type, or event category). Built-ins ship with a stable id and the
+ * built-in label; users may rename labels, add new entries, assign a color /
+ * icon, and opt into semantic behavior via `flags`. Stored data references the
+ * stable `id`, so renaming a label never orphans existing articles/events.
+ */
+export interface TaxonomyEntry {
+  id: string; // stable key, e.g. "category-characters" — survives renames
+  label: string; // user-visible name (defaults to the built-in label)
+  builtin?: boolean; // true for the bundled defaults; unused guard for delete
+  color?: string; // custom accent (hex) for badges / chips / icons / filters
+  icon?: string; // lucide icon key for map nodes, chips, etc.
+  /** Semantic behavior flags — see taxonomy.ts FLAG_LABELS. */
+  flags?: string[];
+}
+
+/**
+ * Project-wide taxonomy overrides the four fixed enum dropdowns. Everything
+ * driven by these enums (article categories, event categories, location types,
+ * biomes) resolves through here instead of a hardcoded constant.
+ */
+export interface ProjectTaxonomy {
+  articleCategories: TaxonomyEntry[];
+  biomes: TaxonomyEntry[];
+  locationTypes: TaxonomyEntry[];
+  eventCategories: TaxonomyEntry[];
+}
+
 export interface WikiArticle {
   id: string;
   title: string;
-  category: ArticleCategory;
+  category: string; // ArticleCategory id or label — customizable via project taxonomy
+  /**
+   * Folder-article this article nests under (Obsidian-style sub-articles).
+   * Undefined means the article sits at the top level. Any article can host
+   * children while still rendering its own content.
+   */
+  parentId?: string;
   tags: string[];
   markdownContent: string;
   createdAt: string;
@@ -163,7 +198,7 @@ export interface TimelineEvent {
   timestamp: string; // e.g. "12 Aprimay, 5501"
   quadrumYear: string; // e.g. "Year 5501"
   title: string;
-  category: EventCategory;
+  category: string; // EventCategory id or label — customizable via project taxonomy
   threatLevel: ThreatLevel;
   participants: string[];
   location: string;
@@ -194,7 +229,7 @@ export interface DowntimeColonistProfile {
 export interface DowntimeSnippet {
   title: string;
   offsetDays: number; // Days after the anchor date (0 = same day)
-  category: EventCategory;
+  category: string; // EventCategory id — customizable via project taxonomy
   threatLevel: ThreatLevel;
   location: string;
   participants: string[];
@@ -263,7 +298,7 @@ export interface LocationItem {
   description: string;
   hexCoord?: { q: number; r: number };
   position?: { x: number; y: number }; // 0 to 100% on custom overlay
-  biome?: BiomeType;
+  biome?: string; // biome id or label — customizable via project taxonomy
   terrainDifficulty?: number; // Movement multiplier: e.g. 1.0 standard, 1.8 rugged mountain, 0.7 road
   controllingFaction?: string;
   garrisonColonists?: string[];
@@ -449,6 +484,8 @@ export interface StoryProject {
   lastUpdated: string;
   preceptMatrices: PreceptMatrix[];
   culturalFrictionPoints: CulturalFrictionPoint[];
+  /** User-customizeable categories/biomes/location-types/event-categories. */
+  taxonomy?: ProjectTaxonomy;
 }
 
 /* --------------------------- */
@@ -518,7 +555,7 @@ export interface TimelineEvent {
   timestamp: string;
   quadrumYear: string;
   title: string;
-  category: EventCategory;
+  category: string;
   threatLevel: ThreatLevel;
   participants: string[];
   location: string;
@@ -558,7 +595,7 @@ export interface CrossroadScenario {
   triggerConditions: string; // What colony state makes this plausible
   keyParticipants: string[]; // Characters involved
   threatLevel: ThreatLevel;
-  category: EventCategory;
+  category: string; // EventCategory id — customizable via project taxonomy
   moodImpact: string; // How this shifts colony morale
   storyHook: string; // The dramatic question this raises
 }
@@ -585,7 +622,7 @@ export interface CrossroadDraft {
   timelineEvent: {
     title: string;
     timestamp: string;
-    category: EventCategory;
+    category: string; // EventCategory id — customizable via project taxonomy
     threatLevel: ThreatLevel;
     participants: string[];
     location: string;

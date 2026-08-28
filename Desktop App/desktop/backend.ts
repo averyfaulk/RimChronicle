@@ -43,6 +43,29 @@ const PROVIDER_META: Record<
 
 let OPENCODE_API_KEY = "";
 
+/* ------------------------------------------------------------------ */
+/* Taxonomy-aware prompt helpers                                       */
+/* ------------------------------------------------------------------ */
+
+/** Build a TypeScript-ish union of a taxonomy list's labels, or a fallback. */
+function categoryUnion(tax: any, listKey: string, fallback: string): string {
+  const labels = (tax?.[listKey] || []).map((c: any) => c.label).filter(Boolean);
+  return labels.length > 0 ? labels.map((l: string) => `"${l}"`).join(" | ") : fallback;
+}
+
+/** The current label of the article category flagged `is-character`. */
+function characterCategoryLabel(tax: any): string {
+  return (
+    (tax?.articleCategories || []).find((c: any) => (c.flags || []).includes("is-character"))
+      ?.label || "Characters"
+  );
+}
+
+const FALLBACK_EVENT_CATEGORIES =
+  `"Combat" | "Social" | "Mental Break" | "Miracle" | "Quest" | "Tragedy" | "Discovery" | "Surgery" | "Colony Life" | "Travel"`;
+const FALLBACK_ARTICLE_CATEGORIES =
+  `"Characters" | "Factions" | "Locations" | "Relics" | "Chronicles" | "Lore" | "Battles" | "Travel"`;
+
 // Runtime-switchable AI configuration. Initial values come from .env /
 // environment, then POST /api/ai/config can change them without a restart.
 const aiRuntime: {
@@ -315,6 +338,23 @@ async function handleIngestLogs(body: any): Promise<AiResponse> {
     return fail(400, { error: "No log text provided" });
   }
 
+  // Taxonomy (if the renderer passes it) lets the schema unions and the
+  // character-article special-casing reflect the user's own categories.
+  const tax = body?.taxonomy;
+  const evLabels = (tax?.eventCategories || []).map((c: any) => c.label).filter(Boolean);
+  const evUnion =
+    evLabels.length > 0
+      ? evLabels.map((l: string) => `"${l}"`).join(" | ")
+      : `"Combat" | "Social" | "Mental Break" | "Miracle" | "Quest" | "Tragedy" | "Discovery" | "Surgery" | "Colony Life"`;
+  const artLabels = (tax?.articleCategories || []).map((c: any) => c.label).filter(Boolean);
+  const artUnion =
+    artLabels.length > 0
+      ? artLabels.map((l: string) => `"${l}"`).join(" | ")
+      : `"Characters" | "Factions" | "Locations" | "Relics" | "Chronicles" | "Lore"`;
+  const charCategory =
+    (tax?.articleCategories || []).find((c: any) => (c.flags || []).includes("is-character"))
+      ?.label || "Characters";
+
   const prompt = `
 You are analyzing playthrough logs, gameplay events, or world-building chronicle notes (such as RimWorld colony stories, sci-fi/fantasy RPG campaigns, or dramatic narratives).
 The chronicle title is: "${playthroughTitle || "Colony Chronicle"}".
@@ -338,7 +378,7 @@ Respond with a strictly valid JSON object matching this schema:
       "timestamp": "e.g. 5 Aprimay, 5501 or Day 42, Quadrum 2",
       "quadrumYear": "Year 5501",
       "title": "Dramatic Title of Event",
-      "category": "Combat" | "Social" | "Mental Break" | "Miracle" | "Quest" | "Tragedy" | "Discovery" | "Surgery" | "Colony Life",
+      "category": ${evUnion},
       "threatLevel": "Minor" | "Moderate" | "Major" | "Catastrophic",
       "participants": ["Character Name 1", "Character Name 2"],
       "location": "Colony Medical Bay or Location Name",
@@ -404,7 +444,7 @@ Respond with a strictly valid JSON object matching this schema:
     {
       "id": "article-slug",
       "title": "Article Title (e.g. Character Name, Event Name, Location)",
-      "category": "Characters" | "Factions" | "Locations" | "Relics" | "Chronicles" | "Lore",
+      "category": ${artUnion},
       "tags": ["colonist", "combat", "archotech"],
       "markdownContent": "# Title\\n\\nUse [[WikiLinks]] to reference other characters, factions, and locations generously throughout the text! Include markdown infobox quotes, headers (## Origins, ## Chronicle History, ## Key Relationships, ## Notable Exploits), and rich literary storytelling prose.\\n\\nAlways use [[Exact Name]] syntax for cross-referencing."
     }
@@ -422,7 +462,7 @@ Respond with a strictly valid JSON object matching this schema:
   ]
 }
 Ensure the markdown uses [[Entity Name]] wiki link syntax liberally for automatic cross-referencing!
-MANDATORY for every "Characters" category article: include a "## Traits" section listing the character's personality traits and a "## Bionics & Health" section cataloguing all prosthetics, augmentations, implants, scars, and medical conditions (e.g. Bionic Eye, Archotech Arm, Peg Leg, Luciferium Addiction). Never omit these two sections from a character entry.
+MANDATORY for every "${charCategory}" category article: include a "## Traits" section listing the character's personality traits and a "## Bionics & Health" section cataloguing all prosthetics, augmentations, implants, scars, and medical conditions (e.g. Bionic Eye, Archotech Arm, Peg Leg, Luciferium Addiction). Never omit these two sections from a character entry.
 `;
 
   const rawJson = await callModel(
@@ -442,6 +482,10 @@ MANDATORY for every "Characters" category article: include a "## Traits" section
 // 2. AI Plot Gap & Narrative Consistency Analyzer
 async function handleAnalyzePlotGaps(body: any): Promise<AiResponse> {
   const { wikiArticles, events, characters, relationships, hierarchy } = body || {};
+  const tax = body?.taxonomy;
+  const catLabel = (value: string) =>
+    (tax?.articleCategories || []).find((c: any) => c.id === value || c.label === value)?.label ||
+    value;
 
   const prompt = `
 You are an expert narrative editor, story doctor, and plot consistency auditor specializing in procedural storytelling and serialized novel writing.
@@ -464,7 +508,7 @@ Wiki Article Titles & Excerpts:
 ${JSON.stringify(
     (wikiArticles || []).map((a: any) => ({
       title: a.title,
-      category: a.category,
+      category: catLabel(a.category),
       preview: a.markdownContent ? a.markdownContent.slice(0, 300) : "",
     })),
     null,
@@ -517,6 +561,8 @@ Respond with a strictly valid JSON object:
 // 3. AI Bridge Generator (Generates canonical vignette to fill a plot gap)
 async function handleGenerateBridge(body: any): Promise<AiResponse> {
   const { gapTitle, explanation, affectedEntities, context } = body || {};
+  const tax = body?.taxonomy;
+  const evUnion = categoryUnion(tax, "eventCategories", `"Social" | "Tragedy" | "Miracle" | "Combat" | "Discovery"`);
 
   const prompt = `
 Create a compelling, canon-consistent literary vignette/scene that bridges this narrative gap in the chronicle:
@@ -538,7 +584,7 @@ Respond with JSON:
   "timelineEvent": {
     "title": "Event Title",
     "timestamp": "e.g. 11 Jugust, 5502",
-    "category": "Social" | "Tragedy" | "Miracle" | "Combat" | "Discovery",
+    "category": ${evUnion},
     "threatLevel": "Moderate",
     "participants": affectedEntities,
     "description": "2-sentence summary of this bridging moment.",
@@ -619,9 +665,21 @@ Begin writing the chapter now.
 // 5. Expand / Refine Wiki Article
 async function handleExpandWiki(body: any): Promise<AiResponse> {
   const { articleTitle, category, currentContent, promptInstruction, context } = body || {};
+  const tax = body?.taxonomy;
+  const catLabel =
+    (tax?.articleCategories || []).find(
+      (c: any) => c.id === category || c.label === category
+    )?.label || category;
+  const charCatId =
+    (tax?.articleCategories || []).find((c: any) => (c.flags || []).includes("is-character"))
+      ?.id || "category-characters";
+  const charLabel =
+    (tax?.articleCategories || []).find((c: any) => (c.flags || []).includes("is-character"))
+      ?.label || "Characters";
+  const isChar = category === charCatId || /character/i.test(category);
 
   const prompt = `
-You are expanding or refining a world-building Wiki article titled "${articleTitle}" (Category: ${category}).
+You are expanding or refining a world-building Wiki article titled "${articleTitle}" (Category: ${catLabel}).
 
 Current Content:
 """
@@ -635,7 +693,7 @@ ${JSON.stringify(context || {})}
 
 Write the complete updated Markdown article.
 - Use structured markdown with headers (## Biography, ## Psychological Profile, ## Key Relationships, ## Combat & Medical Record, ## Colony Legacy).
-${category === "Characters" ? "- MANDATORY: include a \"## Traits\" section listing personality traits and a \"## Bionics & Health\" section listing all prosthetics, augmentations, implants, and medical conditions.\n" : ""}- Generously use [[Entity Name]] wiki-link syntax for cross-referencing.
+${isChar ? `- MANDATORY: include a "## Traits" section listing personality traits and a "## Bionics & Health" section listing all prosthetics, augmentations, implants, and medical conditions.\n` : ""}- Generously use [[Entity Name]] wiki-link syntax for cross-referencing.
 - Add an infobox quote or colony log snippet if fitting.
 - Keep the tone atmospheric and evocative.
 `;
@@ -681,13 +739,18 @@ async function handleEstimateTravelLogistics(body: any): Promise<AiResponse> {
     caravanMembers,
     projectContext,
   } = body || {};
+  const tax = body?.taxonomy;
+  const biomeLabel = (value?: string) =>
+    (tax?.biomes || []).find((b: any) => b.id === value || b.label === value)?.label ||
+    value ||
+    "";
 
   const prompt = `
 You are a master sci-fi narrative logistician and RimWorld storyteller.
 Analyze an expedition or caravan travel route across the frontier:
 
-Departure: "${sourceLocation?.name}" (Biome: ${sourceLocation?.biome || "Frontier Wilderness"}, Danger: ${sourceLocation?.dangerLevel})
-Destination: "${targetLocation?.name}" (Biome: ${targetLocation?.biome || "Unknown"}, Danger: ${targetLocation?.dangerLevel})
+Departure: "${sourceLocation?.name}" (Biome: ${biomeLabel(sourceLocation?.biome) || "Frontier Wilderness"}, Danger: ${sourceLocation?.dangerLevel})
+Destination: "${targetLocation?.name}" (Biome: ${biomeLabel(targetLocation?.biome) || "Unknown"}, Danger: ${targetLocation?.dangerLevel})
 Calculated Distance: ${distanceHexes} hexes (~${distanceKm} km)
 Caravan Mode: ${caravanMode || "On Foot Forced March"}
 Caravan Roster: ${JSON.stringify(caravanMembers || ["3 Colonists, Pack Animal"])}
@@ -735,12 +798,18 @@ async function handleGenerateReliefMarch(body: any): Promise<AiResponse> {
     reliefColonists,
     projectContext,
   } = body || {};
+  const tax = body?.taxonomy;
+  const evUnion = categoryUnion(tax, "eventCategories", `"Combat" | "Tragedy" | "Miracle" | "Quest"`);
+  const biomeLabel = (value?: string) =>
+    (tax?.biomes || []).find((b: any) => b.id === value || b.label === value)?.label ||
+    value ||
+    "";
 
   const prompt = `
 You are a novelist dramatizing a desperate, high-stakes military relief march across a brutal sci-fi frontier.
 
 Situation:
-- Remote Outpost Under Threat: "${targetOutpost?.name}" (Biome: ${targetOutpost?.biome}, Danger: ${targetOutpost?.dangerLevel})
+- Remote Outpost Under Threat: "${targetOutpost?.name}" (Biome: ${biomeLabel(targetOutpost?.biome)}, Danger: ${targetOutpost?.dangerLevel})
 - Immediate Crisis / Threat: "${crisisTrigger || "Enemy mortar siege & mechanoid assault breach"}"
 - Outpost Defenders: ${JSON.stringify(defendingColonists || ["Isolated mining crew"])}
 - Main Colony: "${sourceColony?.name}" (${travelDays || "4"} Days travel away on foot)
@@ -758,7 +827,7 @@ Respond in JSON format:
   "timelineEvent": {
     "title": "Title of the Relief March / Climax Battle",
     "timestamp": "e.g. 14 Septober, 5503",
-    "category": "Combat" | "Tragedy" | "Miracle" | "Quest",
+    "category": ${evUnion},
     "threatLevel": "Catastrophic" | "Major",
     "location": "${targetOutpost?.name || "Remote Outpost"}",
     "participants": ${(reliefColonists && reliefColonists.length > 0) ? JSON.stringify(reliefColonists) : '["Cole Briggs", "Dr. Valerie Vance"]'},
@@ -790,13 +859,22 @@ Respond in JSON format:
 // 9. AI Location Lore & Hazards Generator
 async function handleGenerateLocationLore(body: any): Promise<AiResponse> {
   const { name, type, biome, dangerLevel, surroundingHexes, projectContext } = body || {};
+  const tax = body?.taxonomy;
+  const typeLabel =
+    (tax?.locationTypes || []).find((t: any) => t.id === type || t.label === type)?.label ||
+    type ||
+    "";
+  const biomeLabel =
+    (tax?.biomes || []).find((b: any) => b.id === biome || b.label === biome)?.label ||
+    biome ||
+    "";
 
   const prompt = `
 You are generating deep world-building lore, historical background, environmental hazards, and tactical value for a location on the frontier map:
 
 Location Name: "${name}"
-Type: "${type}"
-Biome: "${biome}"
+Type: "${typeLabel}"
+Biome: "${biomeLabel}"
 Threat Rating: "${dangerLevel}"
 Context: ${JSON.stringify(projectContext || {})}
 
@@ -831,6 +909,8 @@ async function handleDowntimeDice(body: any): Promise<AiResponse> {
     locations,
     colonyContext,
   } = body || {};
+  const tax = body?.taxonomy;
+  const evUnion = categoryUnion(tax, "eventCategories", `"Colony Life" | "Social" | "Discovery" | "Surgery" | "Mental Break" | "Miracle" | "Tragedy"`);
 
   const count = Math.min(5, Math.max(3, parseInt(snippetCount, 10) || 4));
 
@@ -870,7 +950,7 @@ Respond with a strictly valid JSON object:
     {
       "title": "Evocative small-scale title",
       "offsetDays": 0,
-      "category": "Colony Life" | "Social" | "Discovery" | "Surgery" | "Mental Break" | "Miracle" | "Tragedy",
+      "category": ${evUnion},
       "threatLevel": "Minor" | "Moderate",
       "location": "Location name",
       "participants": ["Eligible Colonist Name"],
@@ -907,6 +987,8 @@ async function handleCrossroads(body: any): Promise<AiResponse> {
     quadrumYear,
     projectTitle,
   } = body || {};
+  const tax = body?.taxonomy;
+  const evUnion = categoryUnion(tax, "eventCategories", FALLBACK_EVENT_CATEGORIES);
 
   if (!Array.isArray(events) || events.length === 0) {
     return fail(400, { error: "No timeline events recorded yet — record a canonical event first." });
@@ -954,7 +1036,7 @@ Respond with a strictly valid JSON object:
       "triggerConditions": "What colony state makes this plausible right now (reference mood, food, threats).",
       "keyParticipants": ["Character Name", "Character Name"],
       "threatLevel": "Minor" | "Moderate" | "Major" | "Catastrophic",
-      "category": "Combat" | "Social" | "Mental Break" | "Miracle" | "Quest" | "Tragedy" | "Discovery" | "Surgery" | "Colony Life",
+      "category": ${evUnion},
       "moodImpact": "How this shifts colony morale (direction + magnitude + who it hits hardest).",
       "storyHook": "The single dramatic question this path raises."
     }
@@ -988,6 +1070,8 @@ async function handleCrossroadsDraft(body: any): Promise<AiResponse> {
     quadrumYear,
     projectTitle,
   } = body || {};
+  const tax = body?.taxonomy;
+  const evUnion = categoryUnion(tax, "eventCategories", FALLBACK_EVENT_CATEGORIES);
 
   if (!scenario) {
     return fail(400, { error: "No crossroads scenario selected" });
@@ -1035,7 +1119,7 @@ Respond with a strictly valid JSON object:
   "timelineEvent": {
     "title": "Event Title",
     "timestamp": "${anchorDate || "e.g. 10 Jugust, 5503"}",
-    "category": "Combat" | "Social" | "Mental Break" | "Miracle" | "Quest" | "Tragedy" | "Discovery" | "Surgery" | "Colony Life",
+    "category": ${evUnion},
     "threatLevel": "Minor" | "Moderate" | "Major" | "Catastrophic",
     "participants": ["Character Name"],
     "location": "Named location from the roster",
@@ -1056,6 +1140,92 @@ Respond with a strictly valid JSON object:
     return ok(parseModelJson(rawJson));
   } catch (e) {
     return fail(500, { error: "Failed to parse crossroads draft JSON", raw: rawJson });
+  }
+}
+
+// 13. Document import classifier: turn user documents (.txt/.md/.docx) into
+// structured character / location / faction / relic wiki articles while
+// preserving the Obsidian-style folder hierarchy.
+async function handleClassifyDocuments(body: any): Promise<AiResponse> {
+  const documents = Array.isArray(body?.documents) ? body.documents : [];
+  if (documents.length === 0) {
+    return fail(400, { error: "No documents provided" });
+  }
+
+  const tax = body?.taxonomy;
+  const artLabels = (tax?.articleCategories || []).map((c: any) => c.label).filter(Boolean);
+  const artUnion =
+    artLabels.length > 0
+      ? artLabels.map((l: string) => `"${l}"`).join(" | ")
+      : `"Characters" | "Factions" | "Locations" | "Relics" | "Chronicles" | "Lore" | "Battles"`;
+  const existingContext = body?.existingContext;
+
+  const prompt = `
+You are importing a set of existing documents into a world-building wiki for the chronicle "${body?.playthroughTitle || "Colony Chronicle"}".
+
+Each document has already been extracted to (Markdown) text and given a proposed title plus an optional folder path (the folder structure comes from an Obsidian-style vault and should be mirrored into the wiki's sub-article hierarchy).
+
+Documents:
+${JSON.stringify(documents, null, 2)}
+
+Current Existing Context (characters, factions, locations, articles — reuse/cross-link these wherever possible):
+${JSON.stringify(existingContext || {}, null, 2)}
+
+Your task:
+For EVERY document, decide what kind of wiki article it should become. Infer from the document's folder, title, and content:
+- Character dossier (a person, colonist, NPC) -> its category should be the "is-character" category and you should emit a structured "character" entity.
+- Location / place (a map site, building, region, outpost) -> the "is-location" category plus a "location" entity.
+- Faction / group -> the factions category plus a "faction" entity.
+- Relic / artifact / item -> the relics category plus a "relic" entity.
+- Otherwise a general lore / chronicle / batt
+
+Each document may also be a "folder" of sub-articles (its title was derived from a folder rather than a file). For those, still map to a category, but set "isFolderArticle": true and provide no entity.
+
+Cross-link: when an article's content references other known entities from the Existing Context, include those entity names in "relatedEntities" so the app can generate [[WikiLinks]].
+
+Respond with a strictly valid JSON object matching this schema:
+{
+  "classification": [
+    {
+      "title": "Document/Action Title",
+      "folderPath": "nested/folder or \"\"",
+      "category": ${artUnion},
+      "categoryLabel": "Resolved label",
+      "isFolderArticle": false,
+      "tags": ["tag1", "tag2"],
+      "relatedEntities": ["Existing Character/Faction/Location Name"],
+      "character": { } | null,
+      "location": { } | null,
+      "faction": { } | null,
+      "relic": { } | null
+    }
+  ],
+  "summary": "Short human summary of what was imported and how it was organized."
+}
+
+Entity schemas (only include the matching one, omit others as null):
+- character: { "name": string, "nickname"?: string, "role"?: string, "faction"?: string, "status": "Active" | "Injured" | "In Mental Break" | "Missing" | "Deceased" | "Transhumanist Ascended", "traits": string[], "healthConditions": string[], "bio": string, "dramaticArc"?: string, "quote"?: string }
+- location: { "name": string, "type": "Locations-derived type or free text", "dangerLevel": "Safe" | "Dangerous" | "Extreme Hazard", "description": string, "biome"?: string }
+- faction: { "name": string, "type": string, "stance": "Allied" | "Hostile" | "Neutral" | "Player Colony", "ideology"?: string, "leader"?: string, "description": string }
+- relic: { "name": string, "category": string, "wielder"?: string, "description": string }
+
+Keep entity names and titles EXACTLY matching the document/matter being imported. Use the user's own category labels when they differ from the defaults.
+`;
+
+  const rawJson = await callModel(
+    prompt,
+    "You are a senior world-building archivist importing a document vault into a wiki. Output ONLY valid JSON.",
+    true
+  );
+
+  try {
+    return ok(parseModelJson(rawJson));
+  } catch (parseErr) {
+    console.error("JSON parse failure on classify-documents:", rawJson);
+    return fail(500, {
+      error: "Failed to parse document classification data from AI",
+      raw: rawJson,
+    });
   }
 }
 
@@ -1102,6 +1272,8 @@ export async function handleAiRequest(
         return await handleCrossroads(body);
       case "POST /api/ai/crossroads-draft":
         return await handleCrossroadsDraft(body);
+      case "POST /api/ai/classify-documents":
+        return await handleClassifyDocuments(body);
       default:
         return fail(404, { error: `Unknown API route: ${route}` });
     }

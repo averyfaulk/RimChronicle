@@ -9,6 +9,7 @@
 
 import { StoryProject } from "../types";
 import { SAMPLE_PROJECT } from "../data/samplePlaythroughs";
+import { migrateProjectTaxonomy, DEFAULT_TAXONOMY } from "./taxonomy";
 
 const STORE_KEY = "rimchronicle_wikis";
 const LAST_OPEN_KEY = "rimchronicle_last_wiki";
@@ -90,7 +91,8 @@ export function loadWiki(id: string): StoryProject | null {
   if (!project.mapSettings) project.mapSettings = { mapStyle: "hexGrid", themeTerrain: "temperate", gridCols: 60, gridRows: 45, showHeatmap: false, heatmapType: "all", showRoutes: true, showLabels: true, showCoordinates: false, showFactions: true, mapSkin: "world" };
   else if (!project.mapSettings.mapSkin) project.mapSettings.mapSkin = "world";
   if (!project.mapRoutes) project.mapRoutes = [];
-  return project;
+  // Backfill the user taxonomy (and remap legacy data to stable ids).
+  return migrateProjectTaxonomy(project);
 }
 
 export function saveWiki(project: StoryProject): void {
@@ -136,6 +138,7 @@ export function createFreshProject(title: string): StoryProject {
     culturalFrictionPoints: [],
     mapSettings: { mapStyle: "hexGrid", themeTerrain: "temperate", gridCols: 60, gridRows: 45, showHeatmap: false, heatmapType: "all", showRoutes: true, showLabels: true, showCoordinates: false, showFactions: true, mapSkin: "world" },
     mapRoutes: [],
+    taxonomy: DEFAULT_TAXONOMY,
     lastUpdated: new Date().toISOString(),
   };
 }

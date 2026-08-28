@@ -1,36 +1,40 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { aiFetch } from "../../lib/aiClient";
 import {
   BookOpen,
   Search,
   Plus,
   Edit3,
-  Eye,
   Pencil,
   Sparkles,
   Download,
   Trash2,
-  Tag,
   Link as LinkIcon,
   ChevronRight,
-  Filter,
+  ChevronDown,
+  CornerDownRight,
+  FolderPlus,
   Layers,
-  FileText,
   User,
-  Shield,
-  MapPin,
-  Flame,
   Check
 } from "lucide-react";
-import { WikiArticle, ArticleCategory, ThemeMode, StoryProject } from "../../types";
+import { WikiArticle, ThemeMode, StoryProject } from "../../types";
 import { selectClasses } from "../../lib/uiTheme";
 import { useLexicon } from "../../lib/lexicon";
+import {
+  getTaxonomy,
+  entryByLabel,
+  hasFlag,
+} from "../../lib/taxonomy";
 import {
   EntityLookup,
   computeArticleBacklinks,
   sanitizeCharacterArticleSections,
   findCharacterByTitle,
-  resolveSlotConfig
+  resolveSlotConfig,
+  getChildrenMap,
+  getAncestorChain,
+  getDescendantIds,
 } from "../../lib/wikiParser";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 import { CharacterSheetPanel } from "../Characters/CharacterSheetPanel";
@@ -63,8 +67,36 @@ export const WikiManager: React.FC<WikiManagerProps> = ({
   const [isEditing, setIsEditing] = useState(false);
   const [editedContent, setEditedContent] = useState("");
   const [editedTitle, setEditedTitle] = useState("");
-  const [editedCategory, setEditedCategory] = useState<ArticleCategory>("Characters");
+  const [editedCategory, setEditedCategory] = useState<string>("");
+  const [editedParentId, setEditedParentId] = useState<string>("");
   const [editedTags, setEditedTags] = useState("");
+
+  // Sidebar tree expansion — a Set of folder-article ids whose children are shown.
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
+
+  // Drag-and-drop reparenting.
+  const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
+  const [isDragOverRoot, setIsDragOverRoot] = useState(false);
+
+  // Auto-expand the ancestor chain whenever the selection changes, so the author
+  // always sees the currently open article even if its parent was collapsed.
+  useEffect(() => {
+    if (!selectedArticleId) return;
+    const chain = getAncestorChain(project.wikiArticles, selectedArticleId);
+    if (chain.length === 0) return;
+    setExpandedFolders((prev) => {
+      const next = new Set(prev);
+      let changed = false;
+      chain.forEach((p) => {
+        if (!next.has(p.id)) {
+          next.add(p.id);
+          changed = true;
+        }
+      });
+      return changed ? next : prev;
+    });
+  }, [selectedArticleId, project.wikiArticles]);
 
   // AI Expand modal state
   const [isAiExpandModalOpen, setIsAiExpandModalOpen] = useState(false);
@@ -78,40 +110,144 @@ export const WikiManager: React.FC<WikiManagerProps> = ({
   // Create article modal state
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [newTitle, setNewTitle] = useState("");
-  const [newCategory, setNewCategory] = useState<ArticleCategory>("Characters");
+  const [newCategory, setNewCategory] = useState<string>("");
+  const [newParentId, setNewParentId] = useState<string>("");
 
   // Calculate dynamic backlinks
   const backlinksMap = useMemo(() => {
     return computeArticleBacklinks(project.wikiArticles);
   }, [project.wikiArticles]);
 
-  const categories: { value: string; label: string; count: number; icon: React.ReactNode }[] = useMemo(() => {
-    const counts: Record<string, number> = { All: project.wikiArticles.length };
+  const tax = useMemo(() => getTaxonomy(project), [project]);
+
+  const categoryMeta = (value: string | undefined): { entry?: (typeof tax.articleCategories)[0]; label: string; color?: string } => {
+    const entry = entryByLabel(tax.articleCategories, value || "");
+    return {
+      entry,
+      label: entry?.label || value || "",
+      color: entry?.color,
+    };
+  };
+
+  const categories: { value: string; label: string; count: number; icon: React.ReactNode; color?: string }[] = useMemo(() => {
+    const counts: Record<string, number> = {};
     project.wikiArticles.forEach((a) => {
-      counts[a.category] = (counts[a.category] || 0) + 1;
+      const key = entryByLabel(tax.articleCategories, a.category)?.id || a.category;
+      counts[key] = (counts[key] || 0) + 1;
     });
 
     return [
-      { value: "All", label: "All", count: counts["All"] || 0, icon: <Layers className="w-3.5 h-3.5" /> },
-      { value: "Characters", label: lex.cat("Characters"), count: counts["Characters"] || 0, icon: <User className="w-3.5 h-3.5" /> },
-      { value: "Factions", label: lex.cat("Factions"), count: counts["Factions"] || 0, icon: <Shield className="w-3.5 h-3.5" /> },
-      { value: "Locations", label: lex.cat("Locations"), count: counts["Locations"] || 0, icon: <MapPin className="w-3.5 h-3.5" /> },
-      { value: "Relics", label: lex.cat("Relics"), count: counts["Relics"] || 0, icon: <Sparkles className="w-3.5 h-3.5" /> },
-      { value: "Chronicles", label: lex.cat("Chronicles"), count: counts["Chronicles"] || 0, icon: <FileText className="w-3.5 h-3.5" /> },
-      { value: "Lore", label: lex.cat("Lore"), count: counts["Lore"] || 0, icon: <BookOpen className="w-3.5 h-3.5" /> },
+      { value: "All", label: "All", count: project.wikiArticles.length, icon: <Layers className="w-3.5 h-3.5" /> },
+      ...tax.articleCategories.map((entry) => ({
+        value: entry.id,
+        label: entry.label,
+        count: counts[entry.id] || 0,
+        icon: <User className="w-3.5 h-3.5" />,
+        color: entry.color,
+      })),
     ];
-  }, [project.wikiArticles, lex]);
+  }, [project.wikiArticles, tax]);
 
-  const filteredArticles = useMemo(() => {
-    return project.wikiArticles.filter((art) => {
-      const matchCategory = activeCategory === "All" || art.category === activeCategory;
-      const matchSearch =
-        art.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        art.tags.some((t) => t.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        art.markdownContent.toLowerCase().includes(searchQuery.toLowerCase());
-      return matchCategory && matchSearch;
+  const childrenMap = useMemo(
+    () => getChildrenMap(project.wikiArticles),
+    [project.wikiArticles]
+  );
+
+  const displayPath = (art: WikiArticle): string => {
+    const chain = getAncestorChain(project.wikiArticles, art.id);
+    return chain.length > 0
+      ? `${chain.map((p) => p.title).join(" › ")} › ${art.title}`
+      : art.title;
+  };
+
+  const sortedParentOptions = (candidates: WikiArticle[]) =>
+    candidates.slice().sort((a, b) => displayPath(a).localeCompare(displayPath(b)));
+
+  // Articles available as a parent when creating a new article.
+  const createParentOptions = useMemo(
+    () => sortedParentOptions(project.wikiArticles),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [project.wikiArticles, childrenMap]
+  );
+
+  interface SidebarRow {
+    article: WikiArticle;
+    depth: number;
+    hasChildren: boolean;
+    childCount: number;
+    isExpanded: boolean;
+  }
+
+  // Flatten the article hierarchy into indented rows for the sidebar tree.
+  const treeRows = useMemo<SidebarRow[]>(() => {
+    const articles = project.wikiArticles;
+    const isSearching = searchQuery.trim().length > 0;
+
+    const matchesSearch = (art: WikiArticle) =>
+      art.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      art.tags.some((t) => t.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      art.markdownContent.toLowerCase().includes(searchQuery.toLowerCase());
+
+    // Collect the ids that belong in the tree given the active filters.
+    const relevant = new Set<string>();
+    if (isSearching) {
+      // Matches plus their ancestor chain only — keeps the tree focused on
+      // the path to each match rather than flooding it with siblings.
+      articles.forEach((a) => {
+        if (!matchesSearch(a)) return;
+        relevant.add(a.id);
+        getAncestorChain(articles, a.id).forEach((p) => relevant.add(p.id));
+      });
+    } else {
+      // Category chips filter roots; descendants always follow a visible parent.
+      const collect = (id: string) => {
+        relevant.add(id);
+        (childrenMap.get(id) || []).forEach((c) => collect(c.id));
+      };
+      articles.forEach((a) => {
+        if (!a.parentId && (activeCategory === "All" || a.category === activeCategory)) {
+          collect(a.id);
+        }
+      });
+    }
+
+    const shouldExpand = (id: string) => isSearching || expandedFolders.has(id);
+
+    const rows: SidebarRow[] = [];
+    const pushChildren = (parentId: string, depth: number) => {
+      (childrenMap.get(parentId) || []).forEach((child) => {
+        if (!relevant.has(child.id)) return;
+        const childList = childrenMap.get(child.id) || [];
+        rows.push({
+          article: child,
+          depth,
+          hasChildren: childList.length > 0,
+          childCount: childList.length,
+          isExpanded: shouldExpand(child.id),
+        });
+        if (childList.length > 0 && shouldExpand(child.id)) {
+          pushChildren(child.id, depth + 1);
+        }
+      });
+    };
+
+    articles.forEach((a) => {
+      if (a.parentId || !relevant.has(a.id)) return;
+      const childList = childrenMap.get(a.id) || [];
+      rows.push({
+        article: a,
+        depth: 0,
+        hasChildren: childList.length > 0,
+        childCount: childList.length,
+        isExpanded: shouldExpand(a.id),
+      });
+      if (childList.length > 0 && shouldExpand(a.id)) {
+        pushChildren(a.id, 1);
+      }
     });
-  }, [project.wikiArticles, activeCategory, searchQuery]);
+
+    return rows;
+  }, [project.wikiArticles, activeCategory, searchQuery, expandedFolders, childrenMap]);
 
   const currentArticle = useMemo(() => {
     if (!selectedArticleId && project.wikiArticles.length > 0) {
@@ -125,11 +261,31 @@ export const WikiManager: React.FC<WikiManagerProps> = ({
     return backlinksMap.get(currentArticle.title.toLowerCase()) || [];
   }, [currentArticle, backlinksMap]);
 
-  // Character dossier linked to this article (Characters category + title match).
+  // Character dossier linked to this article (category flagged as character + title match).
+  const isCharacterCategory = useMemo(
+    () => hasFlag(entryByLabel(tax.articleCategories, currentArticle?.category || ""), "is-character"),
+    [tax, currentArticle]
+  );
+
   const linkedCharacter = useMemo(() => {
-    if (!currentArticle || currentArticle.category !== "Characters") return undefined;
+    if (!currentArticle || !isCharacterCategory) return undefined;
     return findCharacterByTitle(project.characters, currentArticle.title);
-  }, [currentArticle, project.characters]);
+  }, [currentArticle, isCharacterCategory, project.characters]);
+
+  // Articles available as a parent when reparenting the article being edited
+  // (excludes the article itself and any of its descendants to avoid cycles).
+  const editParentOptions = useMemo(() => {
+    if (!currentArticle) return [];
+    const excluded = getDescendantIds(project.wikiArticles, currentArticle.id);
+    excluded.add(currentArticle.id);
+    return sortedParentOptions(project.wikiArticles.filter((a) => !excluded.has(a.id)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project.wikiArticles, currentArticle, childrenMap]);
+
+  const ancestorChain = useMemo(
+    () => getAncestorChain(project.wikiArticles, currentArticle?.id),
+    [currentArticle, project.wikiArticles]
+  );
 
   const handleSelectArticle = (art: WikiArticle) => {
     setSelectedArticleId(art.id);
@@ -140,6 +296,7 @@ export const WikiManager: React.FC<WikiManagerProps> = ({
     if (!currentArticle) return;
     setEditedTitle(currentArticle.title);
     setEditedCategory(currentArticle.category);
+    setEditedParentId(currentArticle.parentId || "");
     setEditedContent(currentArticle.markdownContent);
     setEditedTags(currentArticle.tags.join(", "));
     setIsEditing(true);
@@ -166,6 +323,7 @@ export const WikiManager: React.FC<WikiManagerProps> = ({
           ...a,
           title: editedTitle,
           category: editedCategory,
+          parentId: editedParentId || undefined,
           markdownContent: finalContent,
           tags: tagArray,
           wordCount: words,
@@ -187,7 +345,12 @@ export const WikiManager: React.FC<WikiManagerProps> = ({
     if (!newTitle.trim()) return;
 
     const id = `art-${Date.now()}`;
-    const isCharacterArticle = newCategory === "Characters";
+    // Resolve the chosen category (id or legacy label) to its stable id and label.
+    const categoryEntry =
+      entryByLabel(tax.articleCategories, newCategory) || tax.articleCategories[0];
+    const categoryId = categoryEntry.id;
+    const label = categoryEntry.label;
+    const isCharacterArticle = hasFlag(categoryEntry, "is-character");
 
     // Character articles stay prose-only: traits & attribute slots render
     // live in the Dossier card above the article.
@@ -197,8 +360,9 @@ export const WikiManager: React.FC<WikiManagerProps> = ({
     const newArticle: WikiArticle = {
       id,
       title: newTitle.trim(),
-      category: newCategory,
-      tags: [newCategory.toLowerCase()],
+      category: categoryId,
+      parentId: newParentId || undefined,
+      tags: [label.toLowerCase()],
       markdownContent: initialContent,
       createdAt: new Date().toISOString().split("T")[0],
       lastModified: new Date().toISOString().split("T")[0],
@@ -211,12 +375,24 @@ export const WikiManager: React.FC<WikiManagerProps> = ({
       lastUpdated: new Date().toISOString(),
     });
 
+    // Reveal the fresh sub-article by expanding its parent folder.
+    if (newArticle.parentId) {
+      setExpandedFolders((prev) => {
+        if (prev.has(newArticle.parentId!)) return prev;
+        const next = new Set(prev);
+        next.add(newArticle.parentId!);
+        return next;
+      });
+    }
+
     setSelectedArticleId(id);
     setIsCreateModalOpen(false);
     setNewTitle("");
+    setNewParentId("");
     setIsEditing(true);
     setEditedTitle(newArticle.title);
     setEditedCategory(newArticle.category);
+    setEditedParentId(newArticle.parentId || "");
     setEditedContent(initialContent);
     setEditedTags(newArticle.tags.join(", "));
   };
@@ -226,14 +402,104 @@ export const WikiManager: React.FC<WikiManagerProps> = ({
       alert("Cannot delete the last remaining article.");
       return;
     }
-    const filtered = project.wikiArticles.filter((a) => a.id !== id);
+    const target = project.wikiArticles.find((a) => a.id === id);
+    if (!target) return;
+
+    const childrenCount = project.wikiArticles.filter((a) => a.parentId === id).length;
+    const confirmMsg =
+      childrenCount > 0
+        ? `Delete "${target.title}"? Its ${childrenCount} sub-article${childrenCount > 1 ? "s" : ""} will be moved to the top level.`
+        : `Delete "${target.title}"?`;
+    if (!window.confirm(confirmMsg)) return;
+
+    // Lift direct children to the top level so no content is orphaned or lost.
+    const filtered = project.wikiArticles
+      .filter((a) => a.id !== id)
+      .map((a) => (a.parentId === id ? { ...a, parentId: undefined } : a));
     setProject({
       ...project,
       wikiArticles: filtered,
       lastUpdated: new Date().toISOString(),
     });
+    setExpandedFolders((prev) => {
+      if (!prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
     setSelectedArticleId(filtered[0]?.id);
     setIsEditing(false);
+  };
+
+  const reparentArticle = (id: string, parentId: string | undefined) => {
+    const nextArticles = project.wikiArticles.map((a) =>
+      a.id === id ? { ...a, parentId: parentId || undefined } : a
+    );
+    setProject({
+      ...project,
+      wikiArticles: nextArticles,
+      lastUpdated: new Date().toISOString(),
+    });
+    // Reveal the new location by expanding the target folder.
+    if (parentId) {
+      setExpandedFolders((prev) => {
+        if (prev.has(parentId)) return prev;
+        const next = new Set(prev);
+        next.add(parentId);
+        return next;
+      });
+    }
+    // Keep a live editor's parent field in sync so Save doesn't revert the move.
+    if (currentArticle?.id === id) setEditedParentId(parentId || "");
+  };
+
+  const handleDragStart = (e: React.DragEvent, art: WikiArticle) => {
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", art.id);
+    setDraggedId(art.id);
+  };
+
+  const endDrag = () => {
+    setDraggedId(null);
+    setDragOverId(null);
+    setIsDragOverRoot(false);
+  };
+
+  const isInvalidDropTarget = (target: WikiArticle) => {
+    if (!draggedId || target.id === draggedId) return true;
+    return getDescendantIds(project.wikiArticles, draggedId).has(target.id);
+  };
+
+  const handleDragOverRow = (e: React.DragEvent, art: WikiArticle) => {
+    if (!draggedId) return;
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOverRoot(false);
+    if (isInvalidDropTarget(art)) return;
+    setDragOverId(art.id);
+  };
+
+  const handleDropOnRow = (e: React.DragEvent, art: WikiArticle) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const id = draggedId;
+    setDragOverId(null);
+    if (!id || isInvalidDropTarget(art)) return;
+    reparentArticle(id, art.id);
+  };
+
+  const handleDragOverRoot = (e: React.DragEvent) => {
+    if (!draggedId) return;
+    e.preventDefault();
+    setIsDragOverRoot(true);
+    setDragOverId(null);
+  };
+
+  const handleDropOnRoot = (e: React.DragEvent) => {
+    e.preventDefault();
+    const id = draggedId;
+    setIsDragOverRoot(false);
+    if (id) reparentArticle(id, undefined);
   };
 
   const handleExportSingleArticle = () => {
@@ -252,6 +518,7 @@ export const WikiManager: React.FC<WikiManagerProps> = ({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          taxonomy: tax,
           articleTitle: currentArticle.title,
           category: currentArticle.category,
           currentContent: currentArticle.markdownContent,
@@ -339,7 +606,11 @@ export const WikiManager: React.FC<WikiManagerProps> = ({
           </div>
           <button
             id="btn-new-wiki-article"
-            onClick={() => setIsCreateModalOpen(true)}
+            onClick={() => {
+              setNewCategory(tax.articleCategories[0]?.id || "");
+              setNewParentId("");
+              setIsCreateModalOpen(true);
+            }}
             className={`p-2 rounded-xl border flex items-center justify-center transition-transform active:scale-95 ${
               theme === "dark"
                 ? "bg-amber-500 hover:bg-amber-400 text-[#0c0c0e] border-amber-400 font-bold shadow-amber-500/10"
@@ -373,6 +644,9 @@ export const WikiManager: React.FC<WikiManagerProps> = ({
                   : "bg-slate-950/60 text-cyan-400/70 hover:text-cyan-200 border border-transparent"
               }`}
             >
+              {cat.color && (
+                <span className="w-2 h-2 rounded-full shrink-0 inline-block mr-0.5" style={{ backgroundColor: cat.color }} />
+              )}
               {cat.icon}
               <span>{cat.label}</span>
               <span className="text-[10px] opacity-60">({cat.count})</span>
@@ -381,67 +655,132 @@ export const WikiManager: React.FC<WikiManagerProps> = ({
         </div>
 
         {/* Article Cards List */}
-        <div className="space-y-1.5 max-h-[600px] overflow-y-auto pr-1">
-          {filteredArticles.length === 0 ? (
+        <div
+          onDragOver={handleDragOverRoot}
+          onDrop={handleDropOnRoot}
+          onDragLeave={() => setIsDragOverRoot(false)}
+          className={`space-y-1.5 max-h-[600px] overflow-y-auto pr-1 rounded-xl transition-shadow ${
+            draggedId
+              ? isDragOverRoot
+                ? "ring-2 ring-dashed ring-amber-400/60"
+                : "ring-1 ring-dashed ring-white/10"
+              : ""
+          }`}
+        >
+          {isDragOverRoot && draggedId && (
+            <div className="p-2 text-center text-[11px] font-mono opacity-80 text-amber-400 bg-amber-500/10 rounded-xl border border-dashed border-amber-400/40">
+              Drop to move to the top level
+            </div>
+          )}
+          {treeRows.length === 0 ? (
             <div className="text-center py-8 opacity-60 text-xs italic">
               No wiki articles found matching "{searchQuery}".
             </div>
           ) : (
-            filteredArticles.map((art) => {
+            treeRows.map(({ article: art, depth, hasChildren, childCount, isExpanded }) => {
               const isSelected = currentArticle?.id === art.id;
+              const toggleExpand = (e: React.MouseEvent) => {
+                e.stopPropagation();
+                setExpandedFolders((prev) => {
+                  const next = new Set(prev);
+                  if (next.has(art.id)) next.delete(art.id);
+                  else next.add(art.id);
+                  return next;
+                });
+              };
               return (
                 <button
                   key={art.id}
                   id={`article-card-${art.id}`}
+                  draggable
+                  onDragStart={(e) => handleDragStart(e, art)}
+                  onDragEnd={endDrag}
+                  onDragOver={(e) => handleDragOverRow(e, art)}
+                  onDrop={(e) => handleDropOnRow(e, art)}
+                  onDragLeave={() => setDragOverId((prev) => (prev === art.id ? null : prev))}
                   onClick={() => handleSelectArticle(art)}
-                  className={`w-full text-left p-3 rounded-xl border transition-all flex items-center justify-between group ${
+                  style={{ paddingLeft: 12 + depth * 20 }}
+                  className={`w-full text-left p-3 rounded-xl border transition-all flex items-center justify-between group cursor-grab active:cursor-grabbing ${
                     isSelected
                       ? theme === "dark"
                         ? "bg-[#1a1a20] border-amber-500/50 text-[#fafafa] shadow-sm font-medium"
                         : theme === "parchment"
                         ? "bg-amber-200/90 border-amber-400 text-stone-950 shadow-sm font-semibold"
                         : "bg-cyan-950/90 border-cyan-400 text-cyan-50 shadow-sm"
+                      : dragOverId === art.id
+                      ? "bg-amber-500/10 border-amber-400 text-inherit"
                       : theme === "dark"
                       ? "bg-[#0e0e11]/80 border-[#202026] text-zinc-300 hover:bg-[#16161b]"
                       : theme === "parchment"
                       ? "bg-amber-50/70 border-amber-200 text-stone-800 hover:bg-amber-100"
                       : "bg-slate-950/40 border-cyan-950 text-cyan-300/80 hover:bg-slate-800/50"
-                  }`}
+                  } ${dragOverId === art.id && !isSelected ? "ring-2 ring-amber-400/50" : ""}`}
                 >
-                  <div className="min-w-0 pr-2">
-                    <div className="flex items-center space-x-1.5 mb-1">
-                      <span
-                        className={`text-[9px] uppercase font-mono px-1.5 py-0.2 rounded font-bold ${
-                          art.category === "Characters"
-                            ? "bg-blue-500/20 text-blue-400"
-                            : art.category === "Factions"
-                            ? "bg-red-500/20 text-red-400"
-                            : art.category === "Locations"
-                            ? "bg-emerald-500/20 text-emerald-400"
-                            : art.category === "Relics"
-                            ? "bg-amber-500/20 text-amber-400"
-                            : "bg-purple-500/20 text-purple-400"
-                        }`}
-                      >
-                        {lex.cat(art.category)}
-                      </span>
-                      <span className="text-[10px] opacity-40 font-mono">
-                        {art.wordCount || art.markdownContent.split(/\s+/).length} words
-                      </span>
-                    </div>
-                    <h4 className="font-serif font-bold text-sm truncate">{art.title}</h4>
-                    {art.tags.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mt-1">
-                        {art.tags.slice(0, 2).map((t) => (
-                          <span
-                            key={t}
-                            className="text-[9px] px-1 rounded bg-black/20 opacity-70 font-mono"
-                          >
-                            #{t}
+                  <div className="min-w-0 pr-2 flex items-start gap-1.5">
+                    <span
+                      onClick={hasChildren ? toggleExpand : undefined}
+                      className={`shrink-0 mt-0.5 ${
+                        hasChildren ? "cursor-pointer hover:opacity-80" : "opacity-40"
+                      }`}
+                      title={
+                        hasChildren
+                          ? isExpanded
+                            ? "Collapse sub-articles"
+                            : `Expand sub-articles (${childCount})`
+                          : depth > 0
+                          ? "Sub-article"
+                          : undefined
+                      }
+                    >
+                      {hasChildren ? (
+                        isExpanded ? (
+                          <ChevronDown className="w-3.5 h-3.5" />
+                        ) : (
+                          <ChevronRight className="w-3.5 h-3.5 opacity-90" />
+                        )
+                      ) : depth > 0 ? (
+                        <CornerDownRight className="w-3.5 h-3.5" />
+                      ) : (
+                        <span className="w-3.5 h-3.5 block" />
+                      )}
+                    </span>
+                    <div className="min-w-0">
+                      <div className="flex items-center space-x-1.5 mb-1">
+                        <span
+                          className={`text-[9px] uppercase font-mono px-1.5 py-0.2 rounded font-bold ${
+                            theme === "dark" ? "text-[#e2e8f0]" : theme === "parchment" ? "text-stone-800" : "text-cyan-50"
+                          }`}
+                          style={
+                            categoryMeta(art.category).color
+                              ? { backgroundColor: `${categoryMeta(art.category).color}33`, color: categoryMeta(art.category).color }
+                              : undefined
+                          }
+                        >
+                          {categoryMeta(art.category).label}
+                        </span>
+                        <span className="text-[10px] opacity-40 font-mono">
+                          {art.wordCount || art.markdownContent.split(/\s+/).length} words
+                        </span>
+                        {hasChildren && (
+                          <span className="text-[10px] px-1.5 rounded bg-black/20 opacity-60 font-mono" title="Folder article">
+                            ▾{childCount}
                           </span>
-                        ))}
+                        )}
                       </div>
-                    )}
+                      <h4 className="font-serif font-bold text-sm truncate">{art.title}</h4>
+                      {art.tags.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {art.tags.slice(0, 2).map((t) => (
+                            <span
+                              key={t}
+                              className="text-[9px] px-1 rounded bg-black/20 opacity-70 font-mono"
+                            >
+                              #{t}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
                   <ChevronRight
                     className={`w-4 h-4 shrink-0 transition-transform ${
@@ -468,23 +807,38 @@ export const WikiManager: React.FC<WikiManagerProps> = ({
       >
         {currentArticle ? (
           <div>
+            {/* Breadcrumb — location within the article tree */}
+            {ancestorChain.length > 0 && (
+              <div className="flex items-center flex-wrap gap-1 text-[11px] font-mono opacity-70 pb-3 -mt-1">
+                {ancestorChain.map((p) => (
+                  <React.Fragment key={p.id}>
+                    <button
+                      onClick={() => setSelectedArticleId(p.id)}
+                      className="underline decoration-dotted hover:opacity-100"
+                      title={`Open "${p.title}"`}
+                    >
+                      {p.title}
+                    </button>
+                    <ChevronRight className="w-3 h-3 opacity-40" />
+                  </React.Fragment>
+                ))}
+                <span className="font-semibold opacity-90">{currentArticle.title}</span>
+              </div>
+            )}
             {/* Top Toolbar */}
             <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-white/10">
               <div className="flex items-start gap-2">
                 <span
                   className={`text-xs uppercase font-mono px-2 py-0.5 rounded-md font-bold ${
-                    currentArticle.category === "Characters"
-                      ? "bg-blue-500/20 text-blue-400"
-                      : currentArticle.category === "Factions"
-                      ? "bg-red-500/20 text-red-400"
-                      : currentArticle.category === "Locations"
-                      ? "bg-emerald-500/20 text-emerald-400"
-                      : currentArticle.category === "Relics"
-                      ? "bg-amber-500/20 text-amber-400"
-                      : "bg-purple-500/20 text-purple-400"
+                    theme === "dark" ? "text-[#e2e8f0]" : theme === "parchment" ? "text-stone-800" : "text-cyan-50"
                   }`}
+                  style={
+                    categoryMeta(currentArticle.category).color
+                      ? { backgroundColor: `${categoryMeta(currentArticle.category).color}33`, color: categoryMeta(currentArticle.category).color }
+                      : undefined
+                  }
                 >
-                  {lex.cat(currentArticle.category)}
+                  {categoryMeta(currentArticle.category).label}
                 </span>
                 <div className="min-w-0">
                   {linkedCharacter && (
@@ -559,6 +913,30 @@ export const WikiManager: React.FC<WikiManagerProps> = ({
                   >
                     <Edit3 className="w-3.5 h-3.5" />
                     <span>Edit .md</span>
+                  </button>
+                )}
+
+                {/* New Sub-article — nests the new article under the current one */}
+                {!isEditing && (
+                  <button
+                    id="btn-new-sub-article"
+                    onClick={() => {
+                      setNewCategory(currentArticle.category || tax.articleCategories[0]?.id || "");
+                      setNewParentId(currentArticle.id);
+                      setNewTitle("");
+                      setIsCreateModalOpen(true);
+                    }}
+                    className={`flex items-center space-x-1 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                      theme === "dark"
+                        ? "border-[#2c2c36] text-zinc-300 hover:bg-[#1c1c24]"
+                        : theme === "parchment"
+                        ? "border-amber-300 text-stone-800 hover:bg-amber-100"
+                        : "border-cyan-800 text-cyan-300 hover:bg-slate-800"
+                    }`}
+                    title="Create a sub-article nested inside this article (folder-style)"
+                  >
+                    <FolderPlus className="w-3.5 h-3.5" />
+                    <span>Sub-article</span>
                   </button>
                 )}
 
@@ -660,7 +1038,7 @@ export const WikiManager: React.FC<WikiManagerProps> = ({
             {isEditing ? (
               <div className="space-y-4">
                 {/* Meta Inputs */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="text-xs font-mono opacity-70 block mb-1">Title</label>
                     <input
@@ -674,16 +1052,31 @@ export const WikiManager: React.FC<WikiManagerProps> = ({
                     <label className="text-xs font-mono opacity-70 block mb-1">Category</label>
                     <select
                       value={editedCategory}
-                      onChange={(e) => setEditedCategory(e.target.value as ArticleCategory)}
+                      onChange={(e) => setEditedCategory(e.target.value)}
                       className={`w-full px-3 py-1.5 rounded-lg outline-none text-sm cursor-pointer ${selectClasses(theme)}`}
                     >
-                      <option value="Characters">{lex.cat("Characters")}</option>
-                      <option value="Factions">{lex.cat("Factions")}</option>
-                      <option value="Locations">{lex.cat("Locations")}</option>
-                      <option value="Relics">{lex.cat("Relics")}</option>
-                      <option value="Chronicles">{lex.cat("Chronicles")}</option>
-                      <option value="Lore">{lex.cat("Lore")}</option>
+                      {tax.articleCategories.map((entry) => (
+                        <option key={entry.id} value={entry.id}>{entry.label}</option>
+                      ))}
                     </select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-mono opacity-70 block mb-1">Parent / Folder (Sub-article of)</label>
+                    <select
+                      value={editedParentId}
+                      onChange={(e) => setEditedParentId(e.target.value)}
+                      className={`w-full px-3 py-1.5 rounded-lg outline-none text-sm cursor-pointer ${selectClasses(theme)}`}
+                    >
+                      <option value="">None (top-level)</option>
+                      {editParentOptions.map((a) => (
+                        <option key={a.id} value={a.id}>{displayPath(a)}</option>
+                      ))}
+                    </select>
+                    {editedParentId && (
+                      <p className="text-[10px] font-mono opacity-50 mt-1">
+                        {displayPath(project.wikiArticles.find((a) => a.id === editedParentId) || currentArticle!)}
+                      </p>
+                    )}
                   </div>
                   <div>
                     <label className="text-xs font-mono opacity-70 block mb-1">Tags (comma separated)</label>
@@ -745,6 +1138,7 @@ export const WikiManager: React.FC<WikiManagerProps> = ({
                   content={currentArticle.markdownContent}
                   lookup={lookup}
                   theme={theme}
+                  taxonomy={tax}
                   onNavigateToArticle={(targetTitle) => {
                     const target = project.wikiArticles.find(
                       (a) => a.title.toLowerCase() === targetTitle.toLowerCase()
@@ -755,7 +1149,8 @@ export const WikiManager: React.FC<WikiManagerProps> = ({
                       // Prompt to create
                       if (window.confirm(`Article "[[${targetTitle}]]" does not exist yet. Would you like to create it?`)) {
                         setNewTitle(targetTitle);
-                        setNewCategory("Characters");
+                        setNewCategory(tax.articleCategories[0]?.id || "");
+                        setNewParentId("");
                         setIsCreateModalOpen(true);
                       }
                     }
@@ -814,16 +1209,42 @@ export const WikiManager: React.FC<WikiManagerProps> = ({
                 <label className="text-xs font-mono opacity-70 block mb-1">Category</label>
                 <select
                   value={newCategory}
-                  onChange={(e) => setNewCategory(e.target.value as ArticleCategory)}
+                  onChange={(e) => setNewCategory(e.target.value)}
                   className={`w-full px-3 py-2 rounded-xl outline-none text-sm cursor-pointer ${selectClasses(theme)}`}
                 >
-                  <option value="Characters">{lex.catHint("Characters")}</option>
-                  <option value="Factions">{lex.catHint("Factions")}</option>
-                  <option value="Locations">{lex.catHint("Locations")}</option>
-                  <option value="Relics">{lex.catHint("Relics")}</option>
-                  <option value="Chronicles">{lex.catHint("Chronicles")}</option>
-                  <option value="Lore">{lex.catHint("Lore")}</option>
+                  {tax.articleCategories.map((entry) => (
+                    <option key={entry.id} value={entry.id}>{entry.label}</option>
+                  ))}
                 </select>
+              </div>
+              <div>
+                <label className="text-xs font-mono opacity-70 block mb-1">Parent / Folder (Sub-article of)</label>
+                <select
+                  value={newParentId}
+                  onChange={(e) => setNewParentId(e.target.value)}
+                  className={`w-full px-3 py-2 rounded-xl outline-none text-sm cursor-pointer ${selectClasses(theme)}`}
+                >
+                  <option value="">None (top-level)</option>
+                  {createParentOptions.map((a) => (
+                    <option key={a.id} value={a.id}>{displayPath(a)}</option>
+                  ))}
+                </select>
+                <label
+                  className={`flex items-center gap-2 mt-2 text-[11px] font-mono cursor-pointer select-none ${
+                    currentArticle ? "opacity-80 hover:opacity-100" : "opacity-40 cursor-not-allowed"
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    disabled={!currentArticle}
+                    checked={newParentId === (currentArticle?.id || "")}
+                    onChange={(e) =>
+                      setNewParentId(e.target.checked && currentArticle ? currentArticle.id : "")
+                    }
+                    className="accent-amber-500"
+                  />
+                  Create as a sub-article of "{currentArticle?.title || "the current article"}"
+                </label>
               </div>
             </div>
 

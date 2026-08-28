@@ -10,14 +10,16 @@ import {
   Zap,
   Tag
 } from "lucide-react";
-import { ThemeMode } from "../../types";
+import { ProjectTaxonomy, ThemeMode } from "../../types";
 import { EntityLookup, findEntityByLinkText } from "../../lib/wikiParser";
 import { useLexicon } from "../../lib/lexicon";
+import { taxonomyLabel } from "../../lib/taxonomy";
 
 interface WikiHoverCardProps {
   linkText: string;
   lookup: EntityLookup;
   theme: ThemeMode;
+  taxonomy: ProjectTaxonomy;
   onNavigateToArticle: (title: string) => void;
   children: React.ReactNode;
 }
@@ -26,6 +28,7 @@ export const WikiHoverCard: React.FC<WikiHoverCardProps> = ({
   linkText,
   lookup,
   theme,
+  taxonomy,
   onNavigateToArticle,
   children,
 }) => {
@@ -209,7 +212,7 @@ export const WikiHoverCard: React.FC<WikiHoverCardProps> = ({
           {entity.type === "article" && entity.data && (
             <div className="space-y-1 text-xs">
               <p className="text-[11px] opacity-70">
-                Category: <span className="font-semibold">{entity.data.category}</span>
+                Category: <span className="font-semibold">{taxonomyLabel(taxonomy.articleCategories, entity.data.category)}</span>
               </p>
               <p className="text-[11px] opacity-85 line-clamp-3">
                 {entity.data.markdownContent.slice(0, 150)}...

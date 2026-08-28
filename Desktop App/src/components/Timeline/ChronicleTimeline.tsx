@@ -29,7 +29,6 @@ import {
 } from "lucide-react";
 import {
   TimelineEvent,
-  EventCategory,
   EventTemplate,
   ThreatLevel,
   ThemeMode,
@@ -44,6 +43,7 @@ import {
 } from "../../types";
 import { MarkdownRenderer } from "../Wiki/MarkdownRenderer";
 import { EntityLookup, buildEntityLookup } from "../../lib/wikiParser";
+import { getTaxonomy, entryByLabel, hasFlag, taxonomyLabel } from "../../lib/taxonomy";
 import {
   DOWNTIME_FREQUENCIES,
   QUADRUMS,
@@ -136,7 +136,7 @@ export const ChronicleTimeline: React.FC<ChronicleTimelineProps> = ({
   const [newTitle, setNewTitle] = useState("");
   const [newTimestamp, setNewTimestamp] = useState("1 Aprimay, 5504");
   const [newQuadrum, setNewQuadrum] = useState("Year 5504");
-  const [newCategory, setNewCategory] = useState<EventCategory>("Combat");
+  const [newCategory, setNewCategory] = useState<string>("");
   const [newThreat, setNewThreat] = useState<ThreatLevel>("Major");
   const [newLocation, setNewLocation] = useState("Mount Karas Caverns");
   const [newParticipants, setNewParticipants] = useState("");
@@ -155,17 +155,44 @@ export const ChronicleTimeline: React.FC<ChronicleTimelineProps> = ({
     loadCustomTemplates()
   );
 
-  const categories: EventCategory[] = [
-    "Combat",
-    "Social",
-    "Mental Break",
-    "Miracle",
-    "Quest",
-    "Tragedy",
-    "Discovery",
-    "Surgery",
-    "Colony Life",
-  ];
+  const tax = useMemo(() => getTaxonomy(project), [project]);
+
+  // Category options for the filter & add-event selects — from project taxonomy.
+  const categories = useMemo(
+    () => tax.eventCategories.map((e) => ({ value: e.id, label: e.label, color: e.color })),
+    [tax]
+  );
+
+  const eventMeta = (value: string) => {
+    const entry = entryByLabel(tax.eventCategories, value);
+    return { entry, label: entry?.label || value, color: entry?.color };
+  };
+
+  const colonyLifeCat = entryByLabel(tax.eventCategories, "Colony Life")?.id || "event-colony-life";
+  const biomeLabel = (v: string) => taxonomyLabel(tax.biomes, v);
+
+  const CATEGORY_ICONS: Record<string, React.ReactNode> = {
+    "event-combat": <Flame className="w-4 h-4" />,
+    "event-social": <Heart className="w-4 h-4" />,
+    "event-mental-break": <AlertTriangle className="w-4 h-4" />,
+    "event-miracle": <Sparkles className="w-4 h-4" />,
+    "event-quest": <Feather className="w-4 h-4" />,
+    "event-tragedy": <Skull className="w-4 h-4" />,
+    "event-discovery": <Award className="w-4 h-4" />,
+    "event-surgery": <Zap className="w-4 h-4" />,
+    "event-colony-life": <MapPin className="w-4 h-4" />,
+    "event-travel": <Shield className="w-4 h-4" />,
+  };
+
+  const getCategoryIcon = (value: string) => {
+    const id = eventMeta(value).entry?.id || value;
+    const color = eventMeta(value).color;
+    return (
+      <span style={color ? { color } : undefined}>
+        {CATEGORY_ICONS[id] || <Clock className="w-4 h-4" />}
+      </span>
+    );
+  };
 
   const filteredEvents = useMemo(() => {
     return project.timelineEvents.filter((e) => {
@@ -273,6 +300,7 @@ export const ChronicleTimeline: React.FC<ChronicleTimelineProps> = ({
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
+            taxonomy: tax,
             anchorDate: formatRimWorldDate(currentTimelineDate),
             quadrumYear: `Year ${currentTimelineDate.year}`,
             snippetCount: diceCount,
@@ -314,7 +342,7 @@ export const ChronicleTimeline: React.FC<ChronicleTimelineProps> = ({
           timestamp: formatRimWorldDate(eventDate),
           quadrumYear: `Year ${eventDate.year}`,
           title: s.title,
-          category: s.category || "Colony Life",
+          category: s.category || colonyLifeCat,
           threatLevel: s.threatLevel || "Minor",
           participants: Array.isArray(s.participants) ? s.participants : [],
           location: s.location || "Mount Karas Caverns",
@@ -378,6 +406,7 @@ export const ChronicleTimeline: React.FC<ChronicleTimelineProps> = ({
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
+            taxonomy: tax,
             projectTitle: project.title,
             anchorDate: currentTimelineDate ? formatRimWorldDate(currentTimelineDate) : null,
             quadrumYear: currentTimelineDate ? `Year ${currentTimelineDate.year}` : null,
@@ -497,6 +526,7 @@ export const ChronicleTimeline: React.FC<ChronicleTimelineProps> = ({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          taxonomy: tax,
           scenario,
           colonySnapshot: crossroadsResult?.colonySnapshot || null,
           projectTitle: project.title,
@@ -547,7 +577,7 @@ export const ChronicleTimeline: React.FC<ChronicleTimelineProps> = ({
           timestamp:
             event.timestamp ||
             (currentTimelineDate ? formatRimWorldDate(currentTimelineDate) : "1 Aprimay, 5504"),
-          category: event.category || scenario.category || "Colony Life",
+          category: event.category || scenario.category || colonyLifeCat,
           threatLevel: event.threatLevel || scenario.threatLevel || "Moderate",
           participants,
           location: event.location || project.locations[0]?.name || "Colony",
@@ -681,27 +711,6 @@ export const ChronicleTimeline: React.FC<ChronicleTimelineProps> = ({
       .map((t) => t.trim())
       .filter(Boolean);
 
-  const getCategoryIcon = (category: EventCategory) => {
-    switch (category) {
-      case "Combat":
-        return <Flame className="w-4 h-4 text-red-500" />;
-      case "Social":
-        return <Heart className="w-4 h-4 text-rose-400" />;
-      case "Mental Break":
-        return <AlertTriangle className="w-4 h-4 text-amber-500" />;
-      case "Miracle":
-        return <Sparkles className="w-4 h-4 text-cyan-400" />;
-      case "Tragedy":
-        return <Skull className="w-4 h-4 text-purple-400" />;
-      case "Surgery":
-        return <Zap className="w-4 h-4 text-blue-400" />;
-      case "Discovery":
-        return <Award className="w-4 h-4 text-emerald-400" />;
-      default:
-        return <Clock className="w-4 h-4 text-slate-400" />;
-    }
-  };
-
   return (
     <div className="space-y-6">
       {/* Top Header & Filters */}
@@ -800,7 +809,10 @@ export const ChronicleTimeline: React.FC<ChronicleTimelineProps> = ({
             {/* Add Event */}
             <button
               id="btn-add-timeline-event"
-              onClick={() => setIsAddModalOpen(true)}
+              onClick={() => {
+                setNewCategory(tax.eventCategories[0]?.id || "");
+                setIsAddModalOpen(true);
+              }}
               className={`flex items-center space-x-1 px-3 py-1.5 rounded-lg text-xs font-bold transition-transform active:scale-95 ${
                 theme === "dark"
                   ? "bg-amber-500 hover:bg-amber-400 text-[#0c0c0e]"
@@ -826,8 +838,8 @@ export const ChronicleTimeline: React.FC<ChronicleTimelineProps> = ({
             >
               <option value="All">All Categories</option>
               {categories.map((c) => (
-                <option key={c} value={c}>
-                  {lex.evCat(c)}
+                <option key={c.value} value={c.value}>
+                  {c.label}
                 </option>
               ))}
             </select>
@@ -959,8 +971,11 @@ export const ChronicleTimeline: React.FC<ChronicleTimelineProps> = ({
                       >
                         {evt.threatLevel}
                       </span>
-                      <span className="text-[10px] font-mono opacity-50 px-1.5 py-0.2 rounded bg-black/20">
-                        {lex.evCat(evt.category)}
+                      <span
+                        className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-black/20"
+                        style={eventMeta(evt.category).color ? { color: eventMeta(evt.category).color } : undefined}
+                      >
+                        {eventMeta(evt.category).label}
                       </span>
                     </div>
                     <h4 className="font-serif font-bold text-base sm:text-lg">{evt.title}</h4>
@@ -1046,7 +1061,9 @@ export const ChronicleTimeline: React.FC<ChronicleTimelineProps> = ({
                       evt.location.toLowerCase().includes(l.name.toLowerCase())
                   );
                   const mainColony =
-                    project.locations.find((l) => l.type.toLowerCase().includes("colony")) ||
+                    project.locations.find((l) =>
+                      hasFlag(entryByLabel(tax.locationTypes, l.type), "colony-type")
+                    ) ||
                     project.locations[0];
 
                   const isRemote =
@@ -1086,7 +1103,7 @@ export const ChronicleTimeline: React.FC<ChronicleTimelineProps> = ({
                         </span>
                         {loc?.biome && (
                           <span className="text-[10px] opacity-60 font-mono">
-                            • {loc.biome}
+                            • {biomeLabel(loc.biome)}
                           </span>
                         )}
                         {isRemote && (
@@ -1229,12 +1246,12 @@ export const ChronicleTimeline: React.FC<ChronicleTimelineProps> = ({
                   <label className="font-mono opacity-70 block mb-1">Category</label>
                   <select
                     value={newCategory}
-                    onChange={(e) => setNewCategory(e.target.value as EventCategory)}
+                    onChange={(e) => setNewCategory(e.target.value)}
                     className={`w-full px-2 py-1.5 rounded-lg outline-none cursor-pointer ${selectClasses(theme)}`}
                   >
                     {categories.map((c) => (
-                      <option key={c} value={c}>
-                        {lex.evCat(c)}
+                      <option key={c.value} value={c.value}>
+                        {c.label}
                       </option>
                     ))}
                   </select>
@@ -1861,6 +1878,7 @@ export const ChronicleTimeline: React.FC<ChronicleTimelineProps> = ({
                       content={crossroadsDraft.openingSceneMarkdown}
                       lookup={entityLookup}
                       theme={theme}
+                      taxonomy={tax}
                       onNavigateToArticle={onNavigateToArticle}
                       className={`p-4 rounded-xl border min-h-[24rem] max-h-[32rem] overflow-y-auto ${
                         theme === "dark" ? "bg-black/30 border-[#1f1f26]" : "bg-amber-100/60 border-amber-200"
@@ -1923,12 +1941,12 @@ export const ChronicleTimeline: React.FC<ChronicleTimelineProps> = ({
                       <span className="text-[10px] font-mono opacity-60 block mb-1">Category</span>
                       <select
                         value={crossroadsDraft.timelineEvent.category}
-                        onChange={(e) => patchDraftEvent({ category: e.target.value as EventCategory })}
+                        onChange={(e) => patchDraftEvent({ category: e.target.value })}
                         className={`w-full px-2 py-1.5 rounded-lg outline-none cursor-pointer ${selectClasses(theme)}`}
                       >
                         {categories.map((c) => (
-                          <option key={c} value={c}>
-                            {lex.evCat(c)}
+                          <option key={c.value} value={c.value}>
+                            {c.label}
                           </option>
                         ))}
                       </select>
@@ -2101,6 +2119,7 @@ export const ChronicleTimeline: React.FC<ChronicleTimelineProps> = ({
       {isLibraryOpen && (
         <ScenarioLibraryModal
           theme={theme}
+          categoryOptions={tax.eventCategories}
           onClose={() => setIsLibraryOpen(false)}
           onSaved={() => setCustomPresets(loadCustomScenarios())}
         />
@@ -2125,6 +2144,7 @@ export const ChronicleTimeline: React.FC<ChronicleTimelineProps> = ({
       {isTemplateManagerOpen && (
         <TemplateManagerModal
           theme={theme}
+          categoryOptions={tax.eventCategories}
           onClose={() => setIsTemplateManagerOpen(false)}
           onSaved={() => setCustomTemplates(loadCustomTemplates())}
         />

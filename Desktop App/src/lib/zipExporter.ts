@@ -2,7 +2,7 @@ import JSZip from "jszip";
 import { StoryProject } from "../types";
 import { getSlotEntries } from "./attributeSlots";
 import { renderStatBlock } from "./statBlock";
-import { resolveSlotConfig } from "./wikiParser";
+import { getAncestorChain, resolveSlotConfig } from "./wikiParser";
 
 export async function exportProjectToMarkdownZip(project: StoryProject): Promise<Blob> {
   const zip = new JSZip();
@@ -24,13 +24,19 @@ Generated with RimChronicle Storyteller Studio.
 `;
   zip.file("README.md", readmeContent);
 
-  // Wiki directory
+  // Wiki directory — sub-articles are nested under their parent folders so the
+  // archive mirrors the app's Obsidian-style hierarchy.
   const wikiFolder = zip.folder("wiki");
   if (wikiFolder) {
+    const safeName = (value: string) => value.replace(/[/\\?%*:|"<>]/g, "-");
     project.wikiArticles.forEach((art) => {
-      const safeTitle = art.title.replace(/[/\\?%*:|"<>]/g, "-");
-      const categoryDir = wikiFolder.folder(art.category.toLowerCase()) || wikiFolder;
-      categoryDir.file(`${safeTitle}.md`, art.markdownContent);
+      let dir = wikiFolder.folder(art.category.toLowerCase()) || wikiFolder;
+      // Walk oldest-first so each ancestor becomes a nested folder.
+      getAncestorChain(project.wikiArticles, art.id).forEach((parent) => {
+        const sub = dir.folder(safeName(parent.title));
+        if (sub) dir = sub;
+      });
+      dir.file(`${safeName(art.title)}.md`, art.markdownContent);
     });
   }
 

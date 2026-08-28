@@ -13,7 +13,6 @@ import {
   BookOpen,
 } from "lucide-react";
 import {
-  EventCategory,
   EventTemplate,
   TemplateField,
   TemplateFieldType,
@@ -33,25 +32,14 @@ import { downloadBlob } from "../../lib/zipExporter";
 import { selectClasses } from "../../lib/uiTheme";
 import { accentClasses, TEMPLATE_ICON_KEYS, TemplateIcon } from "./TemplateIcon";
 import { useLexicon } from "../../lib/lexicon";
+import { taxonomyLabel } from "../../lib/taxonomy";
 
 interface TemplateManagerModalProps {
   theme: ThemeMode;
+  categoryOptions: { id: string; label: string }[];
   onClose: () => void;
   onSaved: () => void;
 }
-
-const CATEGORIES: EventCategory[] = [
-  "Combat",
-  "Social",
-  "Mental Break",
-  "Miracle",
-  "Quest",
-  "Tragedy",
-  "Discovery",
-  "Surgery",
-  "Colony Life",
-  "Travel",
-];
 
 const THREAT_LEVELS: ThreatLevel[] = ["Minor", "Moderate", "Major", "Catastrophic"];
 
@@ -74,7 +62,7 @@ function freshTemplate(): EventTemplate {
     name: "New Stencil",
     icon: "swords",
     accent: "amber",
-    category: "Colony Life",
+    category: "event-colony-life",
     threatLevel: "Moderate",
     titleTemplate: "{{detail}} at {{location}}",
     descriptionTemplate: "{{detail}} occurred at {{location}} on {{date}}.",
@@ -103,10 +91,12 @@ const labelCls = "text-[10px] font-mono opacity-60 uppercase block mb-1";
 
 export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
   theme,
+  categoryOptions,
   onClose,
   onSaved,
 }) => {
   const lex = useLexicon();
+  const catLabel = (v: string) => taxonomyLabel(categoryOptions, v);
   const [templates, setTemplates] = useState<EventTemplate[]>(() => loadCustomTemplates());
   const [mode, setMode] = useState<"list" | "edit">("list");
   const [draft, setDraft] = useState<EventTemplate | null>(null);
@@ -436,7 +426,7 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
               )}
             </span>
             <span className="text-[10px] font-mono opacity-50">
-              {lex.evCat(tpl.category)} · {tpl.threatLevel} · {tpl.fields.length} fields
+              {catLabel(tpl.category)} · {tpl.threatLevel} · {tpl.fields.length} fields
             </span>
           </div>
         </div>
@@ -598,13 +588,16 @@ export const TemplateManagerModal: React.FC<TemplateManagerModalProps> = ({
                 <div>
                   <label className={labelCls}>Category</label>
                   <select
-                    value={draft.category}
-                    onChange={(e) => patchDraft({ category: e.target.value as EventCategory })}
+                    value={
+                      categoryOptions.find((o) => o.label === draft.category)?.id ||
+                      draft.category
+                    }
+                    onChange={(e) => patchDraft({ category: e.target.value })}
                     className={`w-full px-2 py-1.5 rounded-lg outline-none text-xs cursor-pointer ${selectClasses(theme)}`}
                   >
-                    {CATEGORIES.map((c) => (
-                      <option key={c} value={c}>
-                        {lex.evCat(c)}
+                    {categoryOptions.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.label}
                       </option>
                     ))}
                   </select>

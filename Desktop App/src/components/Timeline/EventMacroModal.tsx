@@ -25,6 +25,7 @@ import { accentClasses, TemplateIcon } from "./TemplateIcon";
 import { BUILTIN_TENETS, applyPreceptAnalysis } from "../../lib/preceptEngine";
 import { selectClasses } from "../../lib/uiTheme";
 import { useLexicon } from "../../lib/lexicon";
+import { getTaxonomy, entryByLabel, taxonomyLabel } from "../../lib/taxonomy";
 
 interface EventMacroModalProps {
   template: EventTemplate;
@@ -65,6 +66,7 @@ export const EventMacroModal: React.FC<EventMacroModalProps> = ({
   onClose,
 }) => {
   const lex = useLexicon();
+  const tax = useMemo(() => getTaxonomy(project), [project]);
   const [values, setValues] = useState<TemplateValues>(() => defaultValues(template));
   const [dateInput, setDateInput] = useState<string>(
     masterDate ? formatRimWorldDate(masterDate) : ""
@@ -266,7 +268,7 @@ export const EventMacroModal: React.FC<EventMacroModalProps> = ({
           {project.locations.map((l) => (
             <option key={l.id} value={l.name}>
               {l.name}
-              {l.biome ? ` (${l.biome})` : ""}
+              {l.biome ? ` (${taxonomyLabel(tax.biomes, l.biome)})` : ""}
             </option>
           ))}
         </select>
@@ -516,7 +518,7 @@ export const EventMacroModal: React.FC<EventMacroModalProps> = ({
         {preview && (
           <div className="flex flex-wrap gap-1.5 text-[10px] font-mono">
             <span className="px-2 py-0.5 rounded bg-blue-500/15 text-blue-300 border border-blue-500/30">
-              {lex.evCat(preview.event.category)}
+              {entryByLabel(tax.eventCategories, preview.event.category)?.label || preview.event.category}
             </span>
             <span
               className={`px-2 py-0.5 rounded border ${
@@ -585,6 +587,7 @@ export const EventMacroModal: React.FC<EventMacroModalProps> = ({
                   content={preview.event.description}
                   lookup={lookup}
                   theme={theme}
+                  taxonomy={tax}
                   onNavigateToArticle={onNavigateToArticle}
                 />
                 {preview.event.narrativeImpact && (

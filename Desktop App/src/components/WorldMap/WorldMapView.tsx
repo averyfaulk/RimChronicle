@@ -32,10 +32,10 @@ import {
   StoryProject,
   ThemeMode,
   ThreatLevel,
-  LocationType,
 } from "../../types";
 import { selectClasses } from "../../lib/uiTheme";
 import { useLexicon } from "../../lib/lexicon";
+import { getTaxonomy, taxonomyLabel } from "../../lib/taxonomy";
 import { resolveHazards, autoTravelDays } from "../../lib/routeEngine";
 import { RouteEditorModal } from "./RouteEditorModal";
 import { LocationEditorModal } from "./LocationEditorModal";
@@ -51,35 +51,50 @@ interface WorldMapViewProps {
 /* Icon mapping                                                          */
 /* ------------------------------------------------------------------ */
 
-const WORLD_ICONS: Record<string, React.ReactNode> = {
-  "Colony Settlement": <Landmark className="w-4 h-4" />,
-  "Mining Outpost": <Mountain className="w-4 h-4" />,
-  "Battlefield & War Zone": <Swords className="w-4 h-4" />,
-  "Ancient Cryptosleep Ruins": <Skull className="w-4 h-4" />,
-  "Resource Deposit": <Gem className="w-4 h-4" />,
-  "Psychic Hotspot": <Brain className="w-4 h-4" />,
-  "Crashed Ship Hull": <Rocket className="w-4 h-4" />,
-  "Trading Hub": <Store className="w-4 h-4" />,
-  "Tribal Camp": <Tent className="w-4 h-4" />,
-  "Raider Fortress": <Shield className="w-4 h-4" />,
+const WORLD_ICON_BY_ID: Record<string, React.ReactNode> = {
+  "loc-colony": <Landmark className="w-4 h-4" />,
+  "loc-mining": <Mountain className="w-4 h-4" />,
+  "loc-battlefield": <Swords className="w-4 h-4" />,
+  "loc-cryptosleep": <Skull className="w-4 h-4" />,
+  "loc-resource": <Gem className="w-4 h-4" />,
+  "loc-psychic": <Brain className="w-4 h-4" />,
+  "loc-ship": <Rocket className="w-4 h-4" />,
+  "loc-trade": <Store className="w-4 h-4" />,
+  "loc-tribal": <Tent className="w-4 h-4" />,
+  "loc-raider": <Shield className="w-4 h-4" />,
 };
 
-const DUNGEON_ICONS: Record<string, React.ReactNode> = {
-  "Colony Settlement": <Castle className="w-4 h-4" />,
-  "Mining Outpost": <Mountain className="w-4 h-4" />,
-  "Battlefield & War Zone": <Swords className="w-4 h-4" />,
-  "Ancient Cryptosleep Ruins": <Skull className="w-4 h-4" />,
-  "Resource Deposit": <Gem className="w-4 h-4" />,
-  "Psychic Hotspot": <Scroll className="w-4 h-4" />,
-  "Crashed Ship Hull": <Skull className="w-4 h-4" />,
-  "Trading Hub": <Store className="w-4 h-4" />,
-  "Tribal Camp": <Tent className="w-4 h-4" />,
-  "Raider Fortress": <Castle className="w-4 h-4" />,
+const DUNGEON_ICON_BY_ID: Record<string, React.ReactNode> = {
+  "loc-colony": <Castle className="w-4 h-4" />,
+  "loc-mining": <Mountain className="w-4 h-4" />,
+  "loc-battlefield": <Swords className="w-4 h-4" />,
+  "loc-cryptosleep": <Skull className="w-4 h-4" />,
+  "loc-resource": <Gem className="w-4 h-4" />,
+  "loc-psychic": <Scroll className="w-4 h-4" />,
+  "loc-ship": <Skull className="w-4 h-4" />,
+  "loc-trade": <Store className="w-4 h-4" />,
+  "loc-tribal": <Tent className="w-4 h-4" />,
+  "loc-raider": <Castle className="w-4 h-4" />,
+};
+
+// Legacy label aliases so pre-migration in-memory projects still resolve.
+const LEGACY_TYPE_ALIASES: Record<string, string> = {
+  "Colony Settlement": "loc-colony",
+  "Mining Outpost": "loc-mining",
+  "Battlefield & War Zone": "loc-battlefield",
+  "Ancient Cryptosleep Ruins": "loc-cryptosleep",
+  "Resource Deposit": "loc-resource",
+  "Psychic Hotspot": "loc-psychic",
+  "Crashed Ship Hull": "loc-ship",
+  "Trading Hub": "loc-trade",
+  "Tribal Camp": "loc-tribal",
+  "Raider Fortress": "loc-raider",
 };
 
 function nodeIcon(type: string, skin: "world" | "dungeon") {
-  const map = skin === "dungeon" ? DUNGEON_ICONS : WORLD_ICONS;
-  return map[type] || <Landmark className="w-4 h-4" />;
+  const id = LEGACY_TYPE_ALIASES[type] || type;
+  const map = skin === "dungeon" ? DUNGEON_ICON_BY_ID : WORLD_ICON_BY_ID;
+  return map[id] || <Landmark className="w-4 h-4" />;
 }
 
 const DANGER_COLORS: Record<string, string> = {
@@ -128,6 +143,9 @@ export const WorldMapView: React.FC<WorldMapViewProps> = ({
   onNavigateToArticle,
 }) => {
   const lex = useLexicon();
+  const tax = getTaxonomy(project);
+  const typeLabel = (v: string) => taxonomyLabel(tax.locationTypes, v);
+  const biomeLabel = (v: string) => taxonomyLabel(tax.biomes, v);
   const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const [dims, setDims] = useState({ width: 700, height: 500 });
@@ -700,7 +718,7 @@ export const WorldMapView: React.FC<WorldMapViewProps> = ({
                 </div>
                 <div>
                   <h3 className="font-serif font-bold text-sm leading-tight">{selectedNode.name}</h3>
-                  <span className="text-[10px] font-mono opacity-60">{selectedNode.type}</span>
+                  <span className="text-[10px] font-mono opacity-60">{typeLabel(selectedNode.type)}</span>
                 </div>
               </div>
               <div className="flex items-center space-x-1 shrink-0">
@@ -746,7 +764,7 @@ export const WorldMapView: React.FC<WorldMapViewProps> = ({
               {selectedNode.biome && (
                 <div className="p-2 rounded-lg border border-white/10 bg-black/20">
                   <span className="text-[9px] font-mono uppercase opacity-50 block">Biome</span>
-                  <span className="font-bold">{selectedNode.biome}</span>
+                  <span className="font-bold">{biomeLabel(selectedNode.biome)}</span>
                 </div>
               )}
               {selectedNode.controllingFaction && (

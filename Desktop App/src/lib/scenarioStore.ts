@@ -10,7 +10,7 @@
  * which are resolved from real project data when a scenario fires.
  */
 
-import { EventCategory, ThreatLevel } from "../types";
+import { ThreatLevel } from "../types";
 import { LocalCrossroadPreset, LocalCrossroadResolution } from "./localEngine";
 
 const STORAGE_KEY = "rimchronicle_custom_scenarios";
@@ -19,18 +19,6 @@ export interface ScenarioExportFile {
   version: 1;
   scenarios: LocalCrossroadPreset[];
 }
-
-const VALID_CATEGORIES: EventCategory[] = [
-  "Combat",
-  "Social",
-  "Mental Break",
-  "Miracle",
-  "Quest",
-  "Tragedy",
-  "Discovery",
-  "Surgery",
-  "Colony Life"
-];
 
 const VALID_THREAT_LEVELS: ThreatLevel[] = ["Minor", "Moderate", "Major", "Catastrophic"];
 
@@ -50,10 +38,7 @@ export function isValidPresetShape(x: unknown): x is LocalCrossroadPreset {
     if (!raw || typeof raw !== "object") return false;
     const r = raw as Record<string, unknown>;
     if (!isNonEmptyString(r.label) || !isNonEmptyString(r.title)) return false;
-    if (
-      !isNonEmptyString(r.category) ||
-      !VALID_CATEGORIES.includes(r.category as EventCategory)
-    ) {
+    if (!isNonEmptyString(r.category)) {
       return false;
     }
     if (
