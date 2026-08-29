@@ -13,5 +13,20 @@ export default defineConfig(() => {
         '@': path.resolve(__dirname, '.'),
       },
     },
+    build: {
+      // Electron 43 bundles a modern Chromium — skip legacy-transform overhead.
+      target: 'es2022',
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            vendor: ['react', 'react-dom'],
+            markdown: ['react-markdown'],
+            jszip: ['jszip'],
+            motion: ['motion'],
+            icons: ['lucide-react'],
+          },
+        },
+      },
+    },
   };
 });

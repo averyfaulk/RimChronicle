@@ -1,19 +1,8 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { ActiveTab, StoryProject, ThemeMode } from "./types";
 import { LexiconContext, LexiconMode, loadLexiconMode, saveLexiconMode } from "./lib/lexicon";
 import { Navigation } from "./components/Navigation";
 import { WelcomeScreen } from "./components/Startup/WelcomeScreen";
-import { WikiManager } from "./components/Wiki/WikiManager";
-import { RelationshipGraph } from "./components/Relationships/RelationshipGraph";
-import { WorldMapView } from "./components/WorldMap/WorldMapView";
-import { ChronicleTimeline } from "./components/Timeline/ChronicleTimeline";
-import { IdeologyPage } from "./components/Ideology/IdeologyPage";
-import { PlotGapAnalyzer } from "./components/PlotAnalyzer/PlotGapAnalyzer";
-import { NovelizationStudio } from "./components/Novel/NovelizationStudio";
-import { ChroniclerBot } from "./components/Archivist/ChroniclerBot";
-import { LogIngestionModal } from "./components/Ingest/LogIngestionModal";
-import { TaxonomyManagerModal } from "./components/Worldbuilding/TaxonomyManagerModal";
-import { DiceRollerModal } from "./components/DiceRoller/DiceRollerModal";
 import { buildEntityLookup, EntityLookup } from "./lib/wikiParser";
 import { applyModePreset, migrateProjectSlots } from "./lib/attributeSlots";
 import { exportProjectToMarkdownZip, downloadBlob } from "./lib/zipExporter";
@@ -29,6 +18,50 @@ import {
   setLastOpenedWikiId,
   WikiSummary,
 } from "./lib/projectStore";
+
+// Feature views are code-split so only the active tab's bundle parses/executes
+// at startup. The Navigation shell and WelcomeScreen stay eager.
+const WikiManager = lazy(() =>
+  import("./components/Wiki/WikiManager").then((m) => ({ default: m.WikiManager }))
+);
+const RelationshipGraph = lazy(() =>
+  import("./components/Relationships/RelationshipGraph").then((m) => ({ default: m.RelationshipGraph }))
+);
+const WorldMapView = lazy(() =>
+  import("./components/WorldMap/WorldMapView").then((m) => ({ default: m.WorldMapView }))
+);
+const ChronicleTimeline = lazy(() =>
+  import("./components/Timeline/ChronicleTimeline").then((m) => ({ default: m.ChronicleTimeline }))
+);
+const IdeologyPage = lazy(() =>
+  import("./components/Ideology/IdeologyPage").then((m) => ({ default: m.IdeologyPage }))
+);
+const PlotGapAnalyzer = lazy(() =>
+  import("./components/PlotAnalyzer/PlotGapAnalyzer").then((m) => ({ default: m.PlotGapAnalyzer }))
+);
+const NovelizationStudio = lazy(() =>
+  import("./components/Novel/NovelizationStudio").then((m) => ({ default: m.NovelizationStudio }))
+);
+const ChroniclerBot = lazy(() =>
+  import("./components/Archivist/ChroniclerBot").then((m) => ({ default: m.ChroniclerBot }))
+);
+const LogIngestionModal = lazy(() =>
+  import("./components/Ingest/LogIngestionModal").then((m) => ({ default: m.LogIngestionModal }))
+);
+const TaxonomyManagerModal = lazy(() =>
+  import("./components/Worldbuilding/TaxonomyManagerModal").then((m) => ({ default: m.TaxonomyManagerModal }))
+);
+const DiceRollerModal = lazy(() =>
+  import("./components/DiceRoller/DiceRollerModal").then((m) => ({ default: m.DiceRollerModal }))
+);
+
+function ViewFallback() {
+  return (
+    <div className="flex items-center justify-center py-24">
+      <div className="h-8 w-8 animate-spin rounded-full border-2 border-amber-500 border-t-transparent" />
+    </div>
+  );
+}
 
 const App: React.FC = () => {
   const [project, setProject] = useState<StoryProject | null>(null);
@@ -179,6 +212,7 @@ const App: React.FC = () => {
       />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <Suspense fallback={<ViewFallback />}>
         {activeTab === "wiki" && (
           <WikiManager
             project={project}
@@ -246,31 +280,42 @@ const App: React.FC = () => {
             onNavigateToArticle={handleNavigateToArticle}
           />
         )}
+        </Suspense>
       </main>
 
-      <LogIngestionModal
-        isOpen={ingestOpen}
-        onClose={() => setIngestOpen(false)}
-        project={project}
-        setProject={handleSave}
-        theme={theme}
-        isAiMode={isAiMode}
-      />
-
-      {taxonomyOpen && (
-        <TaxonomyManagerModal
-          project={project}
-          setProject={handleSave}
-          theme={theme}
-          onClose={() => setTaxonomyOpen(false)}
-        />
+      {ingestOpen && (
+        <Suspense fallback={null}>
+          <LogIngestionModal
+            isOpen={ingestOpen}
+            onClose={() => setIngestOpen(false)}
+            project={project}
+            setProject={handleSave}
+            theme={theme}
+            isAiMode={isAiMode}
+          />
+        </Suspense>
       )}
 
-      <DiceRollerModal
-        isOpen={diceOpen}
-        onClose={() => setDiceOpen(false)}
-        theme={theme}
-      />
+      {taxonomyOpen && (
+        <Suspense fallback={null}>
+          <TaxonomyManagerModal
+            project={project}
+            setProject={handleSave}
+            theme={theme}
+            onClose={() => setTaxonomyOpen(false)}
+          />
+        </Suspense>
+      )}
+
+      {diceOpen && (
+        <Suspense fallback={null}>
+          <DiceRollerModal
+            isOpen={diceOpen}
+            onClose={() => setDiceOpen(false)}
+            theme={theme}
+          />
+        </Suspense>
+      )}
 
       {showLibrary && (
         <div className="fixed inset-0 z-50 overflow-y-auto">
