@@ -13,6 +13,7 @@
 
 import fs from "fs";
 import path from "path";
+import crypto from "crypto";
 import dotenv from "dotenv";
 
 // ---------------------------------------------------------------------------
@@ -42,6 +43,10 @@ const PROVIDER_META: Record<
 };
 
 let OPENCODE_API_KEY = "";
+
+// Stable per-app-run session identifier sent as x-opencode-session so the
+// OpenCode gateways (Zen and Go) can route requests and reuse prompt caches.
+const AI_SESSION_ID = crypto.randomUUID();
 
 /* ------------------------------------------------------------------ */
 /* Taxonomy-aware prompt helpers                                       */
@@ -184,6 +189,7 @@ async function requestChatCompletion(
       "Content-Type": "application/json",
       Authorization: `Bearer ${OPENCODE_API_KEY}`,
       "User-Agent": "RimChronicle-Storytelling-Engine",
+      "x-opencode-session": AI_SESSION_ID,
     },
     body: JSON.stringify(body),
   });

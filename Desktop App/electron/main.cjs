@@ -11,6 +11,23 @@ const path = require("path");
 
 const backend = require(path.join(__dirname, "backend.cjs"));
 
+// Join a relative path onto the wiki folder, resolving symlinks and ensuring
+// the result stays inside the folder. Returns null when the path escapes.
+function safeJoin(folder, relPath) {
+  const root = path.resolve(String(folder || ""));
+  const rel = String(relPath).replace(/^\/+/, "");
+  const target = path.resolve(root, rel);
+  if (target !== root && !target.startsWith(root + path.sep)) return null;
+  try {
+    const realRoot = fs.realpathSync(root);
+    const realTarget = fs.realpathSync(target);
+    if (realTarget !== realRoot && !realTarget.startsWith(realRoot + path.sep)) return null;
+  } catch {
+    // Folder (or target) may not exist yet — the lexical check above still guards traversal.
+  }
+  return target;
+}
+
 // Some Linux GL drivers crash Electron's GPU process in a loop
 // (eglCreateImage EGL_BAD_ALLOC -> "Context was lost" -> restart).
 // The UI needs no GPU compositing, so default to software rendering.
@@ -115,6 +132,73 @@ app.whenReady().then(() => {
       count++;
     }
     return { ok: true, folder, count };
+  });
+
+  // List project .json files inside the chosen wiki folder. Returns an array
+  // of { name, relPath } for every projects/*.json plus a root-level
+  // project-backup.json when present (legacy single-wiki folder).
+  ipcMain.handle("file:list-project-files", async (_event, folder) => {
+    const root = String(folder || "");
+    if (!root) return { ok: true, files: [] };
+    const files = [];
+    const projectsDir = path.join(root, "projects");
+    if (fs.existsSync(projectsDir) && fs.statSync(projectsDir).isDirectory()) {
+      for (const name of fs.readdirSync(projectsDir)) {
+        if (!name.toLowerCase().endsWith(".json")) continue;
+        const abs = path.join(projectsDir, name);
+        if (!fs.statSync(abs).isFile()) continue;
+        files.push({ name, relPath: `projects/${name}` });
+      }
+    }
+    const legacy = path.join(root, "project-backup.json");
+    if (fs.existsSync(legacy) && fs.statSync(legacy).isFile()) {
+      files.push({ name: "project-backup.json", relPath: "project-backup.json" });
+    }
+    return { ok: true, files };
+  });
+
+  // Read a single project .json file (path confined to the chosen folder).
+  ipcMain.handle("file:read-project", async (_event, payload) => {
+    const folder = payload && payload.folder;
+    const relPath = payload && payload.relPath;
+    if (typeof folder !== "string" || typeof relPath !== "string") {
+      throw new Error("Invalid read-project payload");
+    }
+    const target = safeJoin(folder, relPath);
+    if (!target) throw new Error("Path escapes the wiki folder");
+    if (fs.existsSync(target) && fs.statSync(target).isFile()) {
+      return { ok: true, content: fs.readFileSync(target, "utf8") };
+    }
+    return { ok: false, content: null };
+  });
+
+  // Write a project .json file into the chosen folder (projects/<id>.json).
+  ipcMain.handle("file:write-project", async (_event, payload) => {
+    const folder = payload && payload.folder;
+    const relPath = payload && payload.relPath;
+    const content = payload && payload.content;
+    if (typeof folder !== "string" || typeof relPath !== "string" || typeof content !== "string") {
+      throw new Error("Invalid write-project payload");
+    }
+    if (!relPath.toLowerCase().endsWith(".json")) throw new Error("Only .json project files are allowed");
+    const target = safeJoin(folder, relPath);
+    if (!target) throw new Error("Path escapes the wiki folder");
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, content, "utf8");
+    return { ok: true, path: target };
+  });
+
+  // Delete a project .json file from the chosen folder.
+  ipcMain.handle("file:delete-project", async (_event, payload) => {
+    const folder = payload && payload.folder;
+    const relPath = payload && payload.relPath;
+    if (typeof folder !== "string" || typeof relPath !== "string") {
+      throw new Error("Invalid delete-project payload");
+    }
+    const target = safeJoin(folder, relPath);
+    if (!target) throw new Error("Path escapes the wiki folder");
+    if (fs.existsSync(target)) fs.unlinkSync(target);
+    return { ok: true };
   });
 
   // Write an exported .zip archive into the chosen folder.

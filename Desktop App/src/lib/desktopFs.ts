@@ -92,3 +92,70 @@ export async function saveBlobToFolder(blob: Blob, filename: string): Promise<bo
   }
   return false;
 }
+
+/* ------------------------------------------------------------------ */
+/* Disk-first project persistence                                     */
+/* ------------------------------------------------------------------ */
+
+export interface ProjectFileRef {
+  name: string;
+  relPath: string;
+}
+
+/** List project .json files stored in the wiki folder (multi-wiki + legacy). */
+export async function listProjectFiles(folder: string): Promise<ProjectFileRef[]> {
+  if (!isDesktopApp() || !window.rimchronicle?.listProjects) return [];
+  try {
+    const res = await window.rimchronicle.listProjects(folder);
+    return res && Array.isArray(res.files) ? res.files : [];
+  } catch (err) {
+    console.error("Listing project files failed:", err);
+    return [];
+  }
+}
+
+/** Read a single project .json file from the wiki folder. */
+export async function readProjectFile(
+  folder: string,
+  relPath: string
+): Promise<string | null> {
+  if (!isDesktopApp() || !window.rimchronicle?.readProject) return null;
+  try {
+    const res = await window.rimchronicle.readProject(folder, relPath);
+    return res && res.ok ? res.content : null;
+  } catch (err) {
+    console.error("Reading project file failed:", err);
+    return null;
+  }
+}
+
+/** Write a project .json file into the wiki folder. */
+export async function writeProjectFile(
+  folder: string,
+  relPath: string,
+  content: string
+): Promise<boolean> {
+  if (!isDesktopApp() || !window.rimchronicle?.writeProject) return false;
+  try {
+    const res = await window.rimchronicle.writeProject(folder, relPath, content);
+    return !!(res && res.ok);
+  } catch (err) {
+    console.error("Writing project file failed:", err);
+    return false;
+  }
+}
+
+/** Delete a project .json file from the wiki folder. */
+export async function deleteProjectFile(
+  folder: string,
+  relPath: string
+): Promise<boolean> {
+  if (!isDesktopApp() || !window.rimchronicle?.deleteProject) return false;
+  try {
+    const res = await window.rimchronicle.deleteProject(folder, relPath);
+    return !!(res && res.ok);
+  } catch (err) {
+    console.error("Deleting project file failed:", err);
+    return false;
+  }
+}

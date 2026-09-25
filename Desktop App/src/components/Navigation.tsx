@@ -49,6 +49,7 @@ interface NavigationProps {
   onOpenLibrary: () => void;
   onOpenTaxonomy: () => void;
   onOpenDiceRoller: () => void;
+  onWikiFolderChange?: (folder: string | null) => void;
   onResetToSample?: () => void;
 }
 
@@ -67,6 +68,7 @@ export const Navigation: React.FC<NavigationProps> = ({
   onOpenLibrary,
   onOpenTaxonomy,
   onOpenDiceRoller,
+  onWikiFolderChange,
 }) => {
   const lex = useLexicon();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -81,16 +83,18 @@ export const Navigation: React.FC<NavigationProps> = ({
     if (picked) {
       setWikiFolder(picked);
       setWikiFolderState(picked);
-      setFolderNotice(`Wiki files will be saved to:\n${picked}`);
+      setFolderNotice(`Wiki saved to:\n${picked}`);
       setTimeout(() => setFolderNotice(""), 4000);
+      if (onWikiFolderChange) await onWikiFolderChange(picked);
     }
   };
 
   const handleClearWikiFolder = () => {
     setWikiFolder(null);
     setWikiFolderState(null);
-    setFolderNotice("Wiki save folder cleared — exports will use browser downloads again.");
+    setFolderNotice("Wiki save folder cleared — wikis fall back to internal storage again.");
     setTimeout(() => setFolderNotice(""), 4000);
+    if (onWikiFolderChange) void onWikiFolderChange(null);
   };
 
   // OpenCode API key management (stored on-device by the backend).
@@ -724,7 +728,7 @@ export const Navigation: React.FC<NavigationProps> = ({
                         </span>
                       ) : (
                         <span className="opacity-60 italic">
-                          Not set — exports download to your browser's default folder.
+                          Not set — wikis are stored in the app's internal storage.
                         </span>
                       )}
                     </div>
@@ -740,7 +744,7 @@ export const Navigation: React.FC<NavigationProps> = ({
                             ? "bg-amber-200 text-amber-950 hover:bg-amber-300"
                             : "bg-cyan-500/15 text-cyan-300 hover:bg-cyan-500/25"
                         }`}
-                        title="Choose where wiki markdown files are saved"
+                        title="Choose where your wikis are saved (project files + markdown)"
                       >
                         <FolderOpen className="w-3.5 h-3.5" />
                         <span>{wikiFolder ? "Change Folder" : "Choose Folder…"}</span>
@@ -763,9 +767,10 @@ export const Navigation: React.FC<NavigationProps> = ({
                       </p>
                     )}
                     <p className="text-[10px] opacity-50 italic mt-1.5 leading-snug">
-                      The full wiki (wiki/, characters/, novel/, README.md, TIMELINE.md &
-                      project-backup.json) is written here automatically as you work.
-                      The Export button saves a separate .zip archive.
+                      Your wikis are saved here as project files (projects/*.json) plus a
+                      rendered markdown mirror (wiki/, characters/, novel/, README.md,
+                      TIMELINE.md &amp; project-backup.json), all written automatically as
+                      you work. The Export button saves a separate .zip archive.
                     </p>
                   </div>
                 </div>

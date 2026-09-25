@@ -20,9 +20,15 @@ import {
   listWikis,
   loadWiki,
   migrateLegacyProject,
+  migrateLocalStorageToDisk,
+  listWikisDisk,
+  loadWikiDisk,
+  deleteWikiDisk,
+  saveWikiDisk,
   saveWiki,
   setLastOpenedWikiId,
   WikiSummary,
+  DiskWikiSummary,
 } from "./lib/projectStore";
 
 // Feature views are code-split so only the active tab's bundle parses/executes
@@ -85,6 +91,33 @@ const App: React.FC = () => {
 
   useEffect(() => {
     migrateLegacyProject();
+    const folder = getWikiFolder();
+    if (folder && isDesktopApp()) {
+      // Disk-first: the chosen save folder is the source of truth. If it is
+      // empty (fresh folder / new install), fall back to the localStorage cache.
+      (async () => {
+        const disk = await listWikisDisk(folder);
+        if (disk.length > 0) {
+          setWikis(disk);
+          const lastId = getLastOpenedWikiId();
+          const target = disk.find((w) => w.id === lastId) ?? disk[0];
+          const loaded = await loadWikiDisk(folder, target.relPath);
+          if (loaded) {
+            setProject(migrateProjectSlots(loaded));
+            setLastOpenedWikiId(loaded.id);
+            return;
+          }
+        }
+        refreshWikis();
+        const lastId = getLastOpenedWikiId();
+        const loaded = lastId ? loadWiki(lastId) : null;
+        setProject(migrateProjectSlots(loaded ?? getSampleProject()));
+        if (loaded) {
+          setLastOpenedWikiId(loaded.id);
+        }
+      })();
+      return;
+    }
     refreshWikis();
     const lastId = getLastOpenedWikiId();
     const loaded = lastId ? loadWiki(lastId) : null;
@@ -94,13 +127,15 @@ const App: React.FC = () => {
     }
   }, []);
 
-  // Autosave the rendered wiki file set into the user's chosen folder whenever
-  // the project changes (debounced so typing in editors doesn't hammer the disk).
+  // Autosave to the user's chosen folder whenever the project changes
+  // (debounced so typing in editors doesn't hammer the disk): write both the
+  // rendered markdown mirror and the live project JSON file.
   useEffect(() => {
     const folder = getWikiFolder();
     if (!folder || !isDesktopApp() || !project) return;
     const handle = window.setTimeout(() => {
       void writeWikiFilesToFolder(folder, buildWikiExportFiles(project));
+      void saveWikiDisk(project, folder);
     }, 1000);
     return () => window.clearTimeout(handle);
   }, [project]);
@@ -112,8 +147,29 @@ const App: React.FC = () => {
     return () => window.clearTimeout(handle);
   }, [exportStatus]);
 
-  const refreshWikis = () => {
+  const refreshWikis = async () => {
+    const folder = getWikiFolder();
+    if (folder && isDesktopApp()) {
+      const disk = await listWikisDisk(folder);
+      setWikis(disk.length > 0 ? disk : listWikis());
+      return;
+    }
     setWikis(listWikis());
+  };
+
+  const persistProject = (next: StoryProject) => {
+    saveWiki(next);
+    const folder = getWikiFolder();
+    if (folder && isDesktopApp()) void saveWikiDisk(next, folder);
+  };
+
+  /** Called whenever the Wiki Save Folder is chosen or cleared. */
+  const handleWikiFolderChanged = async (folder: string | null) => {
+    if (folder && isDesktopApp()) {
+      if (project) void saveWikiDisk(project, folder);
+      await migrateLocalStorageToDisk(folder);
+    }
+    await refreshWikis();
   };
 
   const handleSetLexiconMode = (mode: LexiconMode) => {
@@ -168,6 +224,7 @@ const App: React.FC = () => {
   const handleStartFresh = (title: string) => {
     const fresh = migrateProjectSlots(createFreshProject(title));
     setProject(fresh);
+    persistProject(fresh);
     setLastOpenedWikiId(fresh.id);
     setActiveTab("wiki");
     setSelectedArticleId(undefined);
@@ -178,6 +235,7 @@ const App: React.FC = () => {
   const handleOpenSample = () => {
     const sample = migrateProjectSlots(getSampleProject());
     setProject(sample);
+    persistProject(sample);
     setLastOpenedWikiId(sample.id);
     setActiveTab("wiki");
     setSelectedArticleId(undefined);
@@ -185,7 +243,21 @@ const App: React.FC = () => {
     refreshWikis();
   };
 
-  const handleOpenWiki = (id: string) => {
+  const handleOpenWiki = async (id: string) => {
+    const folder = getWikiFolder();
+    if (folder && isDesktopApp()) {
+      const target = (wikis as DiskWikiSummary[]).find((w) => w.id === id);
+      const loaded = target ? await loadWikiDisk(folder, target.relPath) : null;
+      if (loaded) {
+        setProject(migrateProjectSlots(loaded));
+        setLastOpenedWikiId(loaded.id);
+        setActiveTab("wiki");
+        setSelectedArticleId(undefined);
+        setShowLibrary(false);
+        refreshWikis();
+      }
+      return;
+    }
     const loaded = loadWiki(id);
     if (loaded) {
       setProject(migrateProjectSlots(loaded));
@@ -197,9 +269,13 @@ const App: React.FC = () => {
     }
   };
 
-  const handleDeleteWiki = (id: string) => {
+  const handleDeleteWiki = async (id: string) => {
+    const folder = getWikiFolder();
+    if (folder && isDesktopApp()) {
+      await deleteWikiDisk(folder, id);
+    }
     deleteWiki(id);
-    refreshWikis();
+    await refreshWikis();
   };
 
   if (!project) {
@@ -243,6 +319,7 @@ const App: React.FC = () => {
         onOpenLibrary={() => setShowLibrary(true)}
         onOpenTaxonomy={() => setTaxonomyOpen(true)}
         onOpenDiceRoller={() => setDiceOpen(true)}
+        onWikiFolderChange={handleWikiFolderChanged}
       />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">

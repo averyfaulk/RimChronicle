@@ -31,6 +31,22 @@ declare global {
         fileName: string,
         base64: string
       ) => Promise<{ ok: boolean; path: string }>;
+      listProjects?: (
+        folder: string
+      ) => Promise<{ ok: boolean; files: { name: string; relPath: string }[] }>;
+      readProject?: (
+        folder: string,
+        relPath: string
+      ) => Promise<{ ok: boolean; content: string }>;
+      writeProject?: (
+        folder: string,
+        relPath: string,
+        content: string
+      ) => Promise<{ ok: boolean; path: string }>;
+      deleteProject?: (
+        folder: string,
+        relPath: string
+      ) => Promise<{ ok: boolean }>;
     };
   }
 }

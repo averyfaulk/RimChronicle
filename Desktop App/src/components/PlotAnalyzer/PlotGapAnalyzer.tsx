@@ -92,7 +92,8 @@ export const PlotGapAnalyzer: React.FC<PlotGapAnalyzerProps> = ({
         });
 
         if (!res.ok) {
-          throw new Error("Failed to scan narrative consistency");
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data?.error || "Failed to scan narrative consistency");
         }
 
         data = await res.json();

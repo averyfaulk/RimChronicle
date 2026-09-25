@@ -94,7 +94,8 @@ export const ChroniclerBot: React.FC<ChroniclerBotProps> = ({
       });
 
       if (!res.ok) {
-        throw new Error("Failed to consult the Chronicler");
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.error || "Failed to consult the Chronicler");
       }
 
       const data = await res.json();

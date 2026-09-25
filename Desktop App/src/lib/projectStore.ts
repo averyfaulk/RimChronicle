@@ -10,6 +10,12 @@
 import { StoryProject } from "../types";
 import { SAMPLE_PROJECT } from "../data/samplePlaythroughs";
 import { migrateProjectTaxonomy, DEFAULT_TAXONOMY } from "./taxonomy";
+import {
+  deleteProjectFile,
+  listProjectFiles,
+  readProjectFile,
+  writeProjectFile,
+} from "./desktopFs";
 
 const STORE_KEY = "rimchronicle_wikis";
 const LAST_OPEN_KEY = "rimchronicle_last_wiki";
@@ -116,6 +122,98 @@ export function getLastOpenedWikiId(): string | null {
 
 export function setLastOpenedWikiId(id: string): void {
   localStorage.setItem(LAST_OPEN_KEY, id);
+}
+
+/* ------------------------------------------------------------------ */
+/* Disk-first persistence (Wiki Save Folder)                           */
+/* ------------------------------------------------------------------ */
+
+/** A wiki summary that also knows where its project file lives on disk. */
+export interface DiskWikiSummary extends WikiSummary {
+  relPath: string;
+}
+
+/** Relative path (inside the wiki folder) for a project's live JSON file. */
+export function projectRelPath(project: Pick<StoryProject, "id">): string {
+  const safeId = String(project.id).replace(/[^a-zA-Z0-9_.-]/g, "_");
+  return `projects/${safeId}.json`;
+}
+
+/** Persist a project as a JSON file inside the wiki save folder. */
+export async function saveWikiDisk(project: StoryProject, folder: string): Promise<boolean> {
+  const content = JSON.stringify(
+    { ...project, lastUpdated: new Date().toISOString() },
+    null,
+    2
+  );
+  return writeProjectFile(folder, projectRelPath(project), content);
+}
+
+/** Load a project from a JSON file inside the wiki save folder. */
+export async function loadWikiDisk(folder: string, relPath: string): Promise<StoryProject | null> {
+  const raw = await readProjectFile(folder, relPath);
+  if (!raw) return null;
+  try {
+    const project = JSON.parse(raw) as StoryProject;
+    if (!project || typeof project.id !== "string") return null;
+    if (!project.mapSettings)
+      project.mapSettings = { mapStyle: "hexGrid", themeTerrain: "temperate", gridCols: 60, gridRows: 45, showHeatmap: false, heatmapType: "all", showRoutes: true, showLabels: true, showCoordinates: false, showFactions: true, mapSkin: "world" };
+    else if (!project.mapSettings.mapSkin) project.mapSettings.mapSkin = "world";
+    if (!project.mapRoutes) project.mapRoutes = [];
+    return migrateProjectTaxonomy(project);
+  } catch (e) {
+    console.warn(`Failed to parse project file ${relPath}`, e);
+    return null;
+  }
+}
+
+/** Delete a project's JSON file from the wiki save folder. */
+export async function deleteWikiDisk(folder: string, id: string): Promise<boolean> {
+  return deleteProjectFile(folder, projectRelPath({ id }));
+}
+
+/**
+ * List every wiki stored in the wiki save folder. projects/*.json files are the
+ * source of truth; a root-level project-backup.json (legacy mirror) is only
+ * surfaced when it holds a project not already present as a project file.
+ */
+export async function listWikisDisk(folder: string): Promise<DiskWikiSummary[]> {
+  const files = await listProjectFiles(folder);
+  const out: DiskWikiSummary[] = [];
+  const seenIds = new Set<string>();
+  for (const file of files) {
+    const project = await loadWikiDisk(folder, file.relPath);
+    if (!project) continue;
+    if (seenIds.has(project.id)) continue;
+    seenIds.add(project.id);
+    out.push({
+      id: project.id,
+      title: project.title || "Untitled Chronicle",
+      subtitle: project.subtitle || "",
+      lastUpdated: project.lastUpdated || "",
+      articleCount: project.wikiArticles?.length || 0,
+      eventCount: project.timelineEvents?.length || 0,
+      characterCount: project.characters?.length || 0,
+      relPath: file.relPath,
+    });
+  }
+  return out.sort((a, b) => (b.lastUpdated || "").localeCompare(a.lastUpdated || ""));
+}
+
+/**
+ * Copy every localStorage wiki into the chosen folder so nothing is lost when
+ * switching to disk-first storage. Returns how many wikis were written.
+ */
+export async function migrateLocalStorageToDisk(folder: string): Promise<number> {
+  const store = readStore();
+  const existing = new Set((await listWikisDisk(folder)).map((w) => w.id));
+  let migrated = 0;
+  for (const project of Object.values(store)) {
+    if (!project || typeof project.id !== "string") continue;
+    if (existing.has(project.id)) continue;
+    if (await saveWikiDisk(project, folder)) migrated++;
+  }
+  return migrated;
 }
 
 /** Blank scaffold for a brand-new chronicle. */
