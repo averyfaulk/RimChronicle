@@ -34,6 +34,7 @@ import { selectClasses } from "../../lib/uiTheme";
 import { EntityLookup } from "../../lib/wikiParser";
 import { MarkdownRenderer } from "../Wiki/MarkdownRenderer";
 import { downloadBlob } from "../../lib/zipExporter";
+import { saveBlobToFolder } from "../../lib/desktopFs";
 import { extractCanonViolations, CanonViolation } from "../../lib/canonEngine";
 import { CanonConstraintManagerModal } from "./CanonConstraintManagerModal";
 import { getTaxonomy } from "../../lib/taxonomy";
@@ -550,9 +551,11 @@ export const NovelizationStudio: React.FC<NovelizationStudioProps> = ({
 
               <button
                 id="btn-download-manuscript-md"
-                onClick={() => {
+                onClick={async () => {
                   const blob = new Blob([compiledFullManuscript], { type: "text/markdown;charset=utf-8" });
-                  downloadBlob(blob, `${project.title.replace(/[/\\?%*:|"<>]/g, "-")}_Manuscript.md`);
+                  const fileName = `${project.title.replace(/[/\\?%*:|"<>]/g, "-")}_Manuscript.md`;
+                  const saved = await saveBlobToFolder(blob, fileName);
+                  if (!saved) downloadBlob(blob, fileName);
                 }}
                 className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-bold ${
                   theme === "dark"

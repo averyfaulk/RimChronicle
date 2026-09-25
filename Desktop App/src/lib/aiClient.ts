@@ -21,6 +21,16 @@ declare global {
         path: string,
         options?: { query?: Record<string, string>; body?: unknown }
       ) => Promise<{ status: number; data: any }>;
+      chooseFolder?: () => Promise<string | null>;
+      writeWikiFiles?: (
+        folder: string,
+        files: Record<string, string>
+      ) => Promise<{ ok: boolean; folder: string; count: number }>;
+      writeZip?: (
+        folder: string,
+        fileName: string,
+        base64: string
+      ) => Promise<{ ok: boolean; path: string }>;
     };
   }
 }

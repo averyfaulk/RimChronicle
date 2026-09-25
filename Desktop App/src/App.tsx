@@ -5,7 +5,13 @@ import { Navigation } from "./components/Navigation";
 import { WelcomeScreen } from "./components/Startup/WelcomeScreen";
 import { buildEntityLookup, EntityLookup } from "./lib/wikiParser";
 import { applyModePreset, migrateProjectSlots } from "./lib/attributeSlots";
-import { exportProjectToMarkdownZip, downloadBlob } from "./lib/zipExporter";
+import { exportProjectToMarkdownZip, downloadBlob, buildWikiExportFiles } from "./lib/zipExporter";
+import {
+  getWikiFolder,
+  isDesktopApp,
+  saveBlobToFolder,
+  writeWikiFilesToFolder,
+} from "./lib/desktopFs";
 import {
   createFreshProject,
   deleteWiki,
@@ -75,6 +81,7 @@ const App: React.FC = () => {
   const [diceOpen, setDiceOpen] = useState(false);
   const [selectedArticleId, setSelectedArticleId] = useState<string | undefined>(undefined);
   const [wikis, setWikis] = useState<WikiSummary[]>([]);
+  const [exportStatus, setExportStatus] = useState("");
 
   useEffect(() => {
     migrateLegacyProject();
@@ -86,6 +93,24 @@ const App: React.FC = () => {
       setLastOpenedWikiId(loaded.id);
     }
   }, []);
+
+  // Autosave the rendered wiki file set into the user's chosen folder whenever
+  // the project changes (debounced so typing in editors doesn't hammer the disk).
+  useEffect(() => {
+    const folder = getWikiFolder();
+    if (!folder || !isDesktopApp() || !project) return;
+    const handle = window.setTimeout(() => {
+      void writeWikiFilesToFolder(folder, buildWikiExportFiles(project));
+    }, 1000);
+    return () => window.clearTimeout(handle);
+  }, [project]);
+
+  // Auto-hide the folder/export status toast.
+  useEffect(() => {
+    if (!exportStatus) return;
+    const handle = window.setTimeout(() => setExportStatus(""), 4000);
+    return () => window.clearTimeout(handle);
+  }, [exportStatus]);
 
   const refreshWikis = () => {
     setWikis(listWikis());
@@ -125,6 +150,15 @@ const App: React.FC = () => {
     if (!project) return;
     try {
       const blob = await exportProjectToMarkdownZip(project);
+      const folder = getWikiFolder();
+      if (folder && isDesktopApp()) {
+        const safeName = project.title.replace(/[/\\?%*:|"<>]/g, "-");
+        const saved = await saveBlobToFolder(blob, `${safeName}_Markdown_Wiki_Archive.zip`);
+        if (saved) {
+          setExportStatus(`Exported .zip to ${folder}`);
+          return;
+        }
+      }
       downloadBlob(blob, `${project.title}.zip`);
     } catch (err) {
       console.error("Export failed:", err);
@@ -329,6 +363,12 @@ const App: React.FC = () => {
             onOpenWiki={handleOpenWiki}
             onDeleteWiki={handleDeleteWiki}
           />
+        </div>
+      )}
+
+      {exportStatus && (
+        <div className="fixed bottom-4 right-4 z-[60] max-w-sm px-4 py-2.5 rounded-xl border text-xs font-mono shadow-2xl backdrop-blur-md bg-[#17171d]/95 border-emerald-500/40 text-emerald-300">
+          <span className="opacity-80">{exportStatus}</span>
         </div>
       )}
     </div>

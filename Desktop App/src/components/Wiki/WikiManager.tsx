@@ -40,6 +40,7 @@ import { MarkdownRenderer } from "./MarkdownRenderer";
 import { CharacterSheetPanel } from "../Characters/CharacterSheetPanel";
 import { CharacterEditModal } from "../Characters/CharacterEditModal";
 import { downloadBlob } from "../../lib/zipExporter";
+import { saveBlobToFolder } from "../../lib/desktopFs";
 
 interface WikiManagerProps {
   project: StoryProject;
@@ -502,10 +503,12 @@ export const WikiManager: React.FC<WikiManagerProps> = ({
     if (id) reparentArticle(id, undefined);
   };
 
-  const handleExportSingleArticle = () => {
+  const handleExportSingleArticle = async () => {
     if (!currentArticle) return;
     const blob = new Blob([currentArticle.markdownContent], { type: "text/markdown;charset=utf-8" });
-    downloadBlob(blob, `${currentArticle.title.replace(/[/\\?%*:|"<>]/g, "-")}.md`);
+    const fileName = `${currentArticle.title.replace(/[/\\?%*:|"<>]/g, "-")}.md`;
+    const saved = await saveBlobToFolder(blob, fileName);
+    if (!saved) downloadBlob(blob, fileName);
   };
 
   const handleAiExpand = async () => {

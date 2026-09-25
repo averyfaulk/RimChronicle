@@ -25,6 +25,7 @@ import {
   EyeOff,
   Loader2,
   Scale,
+  Trash2,
   X
 } from "lucide-react";
 import {
@@ -154,6 +155,9 @@ export const ChronicleTimeline: React.FC<ChronicleTimelineProps> = ({
   const [customTemplates, setCustomTemplates] = useState<EventTemplate[]>(() =>
     loadCustomTemplates()
   );
+
+  // Delete Event (confirmation) state
+  const [pendingDelete, setPendingDelete] = useState<TimelineEvent | null>(null);
 
   const tax = useMemo(() => getTaxonomy(project), [project]);
 
@@ -704,6 +708,18 @@ export const ChronicleTimeline: React.FC<ChronicleTimelineProps> = ({
     setNewActionLabel("");
   };
 
+  const handleDeleteEvent = (eventId: string) => {
+    setProject({
+      ...project,
+      timelineEvents: project.timelineEvents.filter((e) => e.id !== eventId),
+      culturalFrictionPoints: (project.culturalFrictionPoints || []).filter(
+        (fp) => fp.eventId !== eventId
+      ),
+      lastUpdated: new Date().toISOString(),
+    });
+    setPendingDelete(null);
+  };
+
   /** Comma-separated tag text → clean lowercase-free tag list. */
   const parseEventTags = (text: string): string[] =>
     text
@@ -981,10 +997,20 @@ export const ChronicleTimeline: React.FC<ChronicleTimelineProps> = ({
                     <h4 className="font-serif font-bold text-base sm:text-lg">{evt.title}</h4>
                   </div>
 
-                  {/* Intensity Meter */}
-                  <div className="flex items-center space-x-1 text-xs font-mono opacity-80" title="Dramatic Intensity (1-10)">
-                    <Flame className="w-3.5 h-3.5 text-amber-500" />
-                    <span className="font-bold">{evt.intensityScore || 7}/10</span>
+                  {/* Intensity Meter + Delete */}
+                  <div className="flex items-center space-x-2">
+                    <div className="flex items-center space-x-1 text-xs font-mono opacity-80" title="Dramatic Intensity (1-10)">
+                      <Flame className="w-3.5 h-3.5 text-amber-500" />
+                      <span className="font-bold">{evt.intensityScore || 7}/10</span>
+                    </div>
+                    <button
+                      id={`btn-delete-timeline-event-${evt.id}`}
+                      onClick={() => setPendingDelete(evt)}
+                      className="p-1.5 rounded-lg border border-red-500/30 text-red-400 opacity-0 group-hover:opacity-80 hover:opacity-100 transition-opacity"
+                      title="Delete this chronicle entry"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 </div>
 
@@ -2111,6 +2137,72 @@ export const ChronicleTimeline: React.FC<ChronicleTimelineProps> = ({
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Delete Event Confirmation modal */}
+      {pendingDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div
+            className={`w-full max-w-md p-6 rounded-2xl border shadow-2xl space-y-4 ${
+              theme === "dark"
+                ? "bg-[#121215] border-[#25252e] text-[#e2e8f0]"
+                : theme === "parchment"
+                ? "bg-amber-50 border-amber-300 text-stone-900"
+                : "bg-slate-900 border-cyan-800 text-cyan-50"
+            }`}
+          >
+            <div className="flex justify-between items-center pb-2 border-b border-white/10">
+              <h3 className="font-serif font-bold text-base flex items-center space-x-2">
+                <Trash2 className="w-4 h-4 text-red-400" />
+                <span>Delete Chronicle Entry</span>
+              </h3>
+              <button
+                onClick={() => setPendingDelete(null)}
+                className="text-xs opacity-60 hover:opacity-100"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-2 text-xs">
+              <p className="opacity-80 leading-relaxed">
+                Are you sure you want to permanently remove this chronicle beat?
+              </p>
+              <div className={`p-3 rounded-xl border ${
+                theme === "dark" ? "bg-black/20 border-[#1f1f26]" : "bg-amber-100/60 border-amber-200"
+              }`}>
+                <span className="block text-[10px] font-mono opacity-60 uppercase mb-1">
+                  {pendingDelete.timestamp}
+                </span>
+                <span className="font-serif font-bold text-sm">{pendingDelete.title}</span>
+                <p className="mt-1 italic opacity-70 text-[11px] leading-relaxed line-clamp-2">
+                  {pendingDelete.description}
+                </p>
+              </div>
+              <p className="text-[10px] opacity-50 italic leading-snug">
+                The entry will be removed from the timeline and its cultural friction points cleared.
+                This cannot be undone.
+              </p>
+            </div>
+
+            <div className="flex justify-end space-x-2 pt-2">
+              <button
+                onClick={() => setPendingDelete(null)}
+                className="px-3 py-1.5 rounded-lg text-xs border border-white/10 opacity-80 hover:opacity-100"
+              >
+                Cancel
+              </button>
+              <button
+                id="btn-confirm-delete-timeline-event"
+                onClick={() => handleDeleteEvent(pendingDelete.id)}
+                className="px-4 py-1.5 rounded-lg text-xs font-bold bg-red-600 hover:bg-red-500 text-white transition-transform active:scale-95 flex items-center space-x-1.5"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Delete Entry</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

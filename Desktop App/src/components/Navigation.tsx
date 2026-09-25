@@ -32,6 +32,7 @@ import { aiFetch } from "../lib/aiClient";
 import { AIModelPicker } from "./AI/AIModelPicker";
 import { LexiconMode, LEXICON_OPTIONS, useLexicon } from "../lib/lexicon";
 import { selectClasses } from "../lib/uiTheme";
+import { chooseWikiFolder, getWikiFolder, setWikiFolder } from "../lib/desktopFs";
 
 interface NavigationProps {
   activeTab: ActiveTab;
@@ -70,6 +71,27 @@ export const Navigation: React.FC<NavigationProps> = ({
   const lex = useLexicon();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const settingsRef = useRef<HTMLDivElement | null>(null);
+
+  // Wiki Save Folder (desktop only — remembered in localStorage).
+  const [wikiFolder, setWikiFolderState] = useState<string | null>(() => getWikiFolder());
+  const [folderNotice, setFolderNotice] = useState("");
+
+  const handleChooseWikiFolder = async () => {
+    const picked = await chooseWikiFolder();
+    if (picked) {
+      setWikiFolder(picked);
+      setWikiFolderState(picked);
+      setFolderNotice(`Wiki files will be saved to:\n${picked}`);
+      setTimeout(() => setFolderNotice(""), 4000);
+    }
+  };
+
+  const handleClearWikiFolder = () => {
+    setWikiFolder(null);
+    setWikiFolderState(null);
+    setFolderNotice("Wiki save folder cleared — exports will use browser downloads again.");
+    setTimeout(() => setFolderNotice(""), 4000);
+  };
 
   // OpenCode API key management (stored on-device by the backend).
   const [apiKeyState, setApiKeyState] = useState({ hasKey: false, keyHint: "" });
@@ -676,6 +698,74 @@ export const Navigation: React.FC<NavigationProps> = ({
                     <p className="text-[10px] opacity-50 italic mt-1.5 leading-snug">
                       Swaps UI wording — saves, links & timelines are untouched.
                       Attribute slots relabel to the genre preset (rename yours to pin them).
+                    </p>
+                  </div>
+
+                  {/* Wiki Save Folder */}
+                  <div>
+                    <label
+                      className="text-[10px] font-mono uppercase opacity-60 block mb-1.5"
+                    >
+                      Wiki Save Folder
+                    </label>
+                    <div className={`p-2.5 rounded-lg border text-[11px] leading-snug ${
+                      theme === "dark"
+                        ? "bg-[#121216] border-[#222228]"
+                        : theme === "parchment"
+                        ? "bg-amber-100 border-amber-300"
+                        : "bg-slate-900 border-cyan-900"
+                    }`}>
+                      {wikiFolder ? (
+                        <span
+                          className="font-mono break-all"
+                          title={wikiFolder}
+                        >
+                          📁 {wikiFolder}
+                        </span>
+                      ) : (
+                        <span className="opacity-60 italic">
+                          Not set — exports download to your browser's default folder.
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1.5 mt-1.5">
+                      <button
+                        type="button"
+                        id="btn-choose-wiki-folder"
+                        onClick={handleChooseWikiFolder}
+                        className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition-colors flex-1 justify-center ${
+                          theme === "dark"
+                            ? "bg-amber-500/15 text-amber-400 hover:bg-amber-500/25"
+                            : theme === "parchment"
+                            ? "bg-amber-200 text-amber-950 hover:bg-amber-300"
+                            : "bg-cyan-500/15 text-cyan-300 hover:bg-cyan-500/25"
+                        }`}
+                        title="Choose where wiki markdown files are saved"
+                      >
+                        <FolderOpen className="w-3.5 h-3.5" />
+                        <span>{wikiFolder ? "Change Folder" : "Choose Folder…"}</span>
+                      </button>
+                      {wikiFolder && (
+                        <button
+                          type="button"
+                          id="btn-clear-wiki-folder"
+                          onClick={handleClearWikiFolder}
+                          className="px-2 py-1.5 rounded-lg text-[10px] font-semibold border border-white/10 opacity-70 hover:opacity-100 hover:text-red-400"
+                          title="Stop saving wiki files to a folder"
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
+                    {folderNotice && (
+                      <p className="text-[10px] text-emerald-500 italic mt-1.5 leading-snug whitespace-pre-line">
+                        {folderNotice}
+                      </p>
+                    )}
+                    <p className="text-[10px] opacity-50 italic mt-1.5 leading-snug">
+                      The full wiki (wiki/, characters/, novel/, README.md, TIMELINE.md &
+                      project-backup.json) is written here automatically as you work.
+                      The Export button saves a separate .zip archive.
                     </p>
                   </div>
                 </div>

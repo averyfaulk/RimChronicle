@@ -5,7 +5,8 @@
  * to the AI backend in THIS process over IPC. No HTTP server is started.
  */
 
-const { app, BrowserWindow, Menu, ipcMain, shell } = require("electron");
+const { app, BrowserWindow, Menu, ipcMain, shell, dialog } = require("electron");
+const fs = require("fs");
 const path = require("path");
 
 const backend = require(path.join(__dirname, "backend.cjs"));
@@ -85,6 +86,50 @@ app.whenReady().then(() => {
       console.error("IPC ai:request failed:", err);
       return { status: 500, data: { error: (err && err.message) || "Unexpected backend error" } };
     }
+  });
+
+  // Directory picker for the wiki save folder (Settings -> Wiki Save Folder).
+  ipcMain.handle("dialog:choose-folder", async () => {
+    const result = await dialog.showOpenDialog(mainWindow, {
+      title: "Choose Wiki Save Folder",
+      buttonLabel: "Use This Folder",
+      properties: ["openDirectory", "createDirectory"],
+    });
+    if (result.canceled || !result.filePaths || result.filePaths.length === 0) return null;
+    return result.filePaths[0];
+  });
+
+  // Write the rendered wiki file set (markdown + JSON) straight into a folder.
+  ipcMain.handle("file:write-wiki-files", async (_event, payload) => {
+    const folder = payload && payload.folder;
+    const files = payload && payload.files;
+    if (typeof folder !== "string" || !files || typeof files !== "object") {
+      throw new Error("Invalid wiki-files payload");
+    }
+    let count = 0;
+    for (const [relPath, content] of Object.entries(files)) {
+      const safeRel = String(relPath).replace(/^\/+/, "");
+      const target = path.join(folder, safeRel);
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      fs.writeFileSync(target, typeof content === "string" ? content : String(content), "utf8");
+      count++;
+    }
+    return { ok: true, folder, count };
+  });
+
+  // Write an exported .zip archive into the chosen folder.
+  ipcMain.handle("file:write-zip", async (_event, payload) => {
+    const folder = payload && payload.folder;
+    const fileName = payload && payload.fileName;
+    const base64 = payload && payload.base64;
+    if (typeof folder !== "string" || typeof fileName !== "string" || typeof base64 !== "string") {
+      throw new Error("Invalid zip payload");
+    }
+    const safeName = String(fileName).replace(/[\/\\]/g, "-");
+    const target = path.join(folder, safeName);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, Buffer.from(base64, "base64"));
+    return { ok: true, path: target };
   });
 
   createWindow();

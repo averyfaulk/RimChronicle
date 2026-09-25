@@ -4,8 +4,15 @@ import { getSlotEntries } from "./attributeSlots";
 import { renderStatBlock } from "./statBlock";
 import { getAncestorChain, resolveSlotConfig } from "./wikiParser";
 
-export async function exportProjectToMarkdownZip(project: StoryProject): Promise<Blob> {
-  const zip = new JSZip();
+const safeName = (value: string) => value.replace(/[/\\?%*:|"<>]/g, "-");
+
+/**
+ * Build the full Markdown wiki export as a flat map of relative path -> file
+ * content. Used both by the .zip exporter and the "save to chosen folder"
+ * feature so both produce identical output.
+ */
+export function buildWikiExportFiles(project: StoryProject): Record<string, string> {
+  const files: Record<string, string> = {};
 
   // Root README / Overview
   const readmeContent = `# ${project.title}
@@ -22,64 +29,49 @@ Last Updated: ${new Date(project.lastUpdated).toLocaleString()}
 
 Generated with RimChronicle Storyteller Studio.
 `;
-  zip.file("README.md", readmeContent);
+  files["README.md"] = readmeContent;
 
   // Wiki directory — sub-articles are nested under their parent folders so the
   // archive mirrors the app's Obsidian-style hierarchy.
-  const wikiFolder = zip.folder("wiki");
-  if (wikiFolder) {
-    const safeName = (value: string) => value.replace(/[/\\?%*:|"<>]/g, "-");
-    project.wikiArticles.forEach((art) => {
-      let dir = wikiFolder.folder(art.category.toLowerCase()) || wikiFolder;
-      // Walk oldest-first so each ancestor becomes a nested folder.
-      getAncestorChain(project.wikiArticles, art.id).forEach((parent) => {
-        const sub = dir.folder(safeName(parent.title));
-        if (sub) dir = sub;
-      });
-      dir.file(`${safeName(art.title)}.md`, art.markdownContent);
+  project.wikiArticles.forEach((art) => {
+    let dir = art.category.toLowerCase();
+    getAncestorChain(project.wikiArticles, art.id).forEach((parent) => {
+      dir = `${dir}/${safeName(parent.title)}`;
     });
-  }
+    files[`wiki/${dir}/${safeName(art.title)}.md`] = art.markdownContent;
+  });
 
   // Characters directory: dossier + dynamic attribute slots + stat block
-  const charactersFolder = zip.folder("characters");
-  if (charactersFolder) {
-    const slots = resolveSlotConfig(project);
-    project.characters.forEach((c) => {
-      const safeName = c.name.replace(/[/\\?%*:|"<>]/g, "-");
-      let md = `# ${c.name}\n*${c.role}${c.faction ? ` — ${c.faction}` : ""}*\n\n${c.bio || ""}\n\n`;
-      if (c.traits?.length) md += `## Traits\n${c.traits.map((t) => `* **${t}**`).join("\n")}\n\n`;
-      slots.forEach((slot) => {
-        const entries = getSlotEntries(c, slot.id);
-        md += `## ${slot.label}\n${entries.length > 0 ? entries.map((e) => `* **${e}**`).join("\n") : "* *(No entries recorded yet.)*"}\n\n`;
-      });
-      md += `${renderStatBlock(c, project)}\n`;
-      if (c.dramaticArc) md += `\n## Dramatic Arc\n${c.dramaticArc}\n`;
-      charactersFolder.file(`${safeName}.md`, md);
+  const slots = resolveSlotConfig(project);
+  project.characters.forEach((c) => {
+    let md = `# ${c.name}\n*${c.role}${c.faction ? ` — ${c.faction}` : ""}*\n\n${c.bio || ""}\n\n`;
+    if (c.traits?.length) md += `## Traits\n${c.traits.map((t) => `* **${t}**`).join("\n")}\n\n`;
+    slots.forEach((slot) => {
+      const entries = getSlotEntries(c, slot.id);
+      md += `## ${slot.label}\n${entries.length > 0 ? entries.map((e) => `* **${e}**`).join("\n") : "* *(No entries recorded yet.)*"}\n\n`;
     });
-  }
+    md += `${renderStatBlock(c, project)}\n`;
+    if (c.dramaticArc) md += `\n## Dramatic Arc\n${c.dramaticArc}\n`;
+    files[`characters/${safeName(c.name)}.md`] = md;
+  });
 
   // Manuscript directory
-  const novelFolder = zip.folder("novel");
-  if (novelFolder) {
-    let fullManuscript = `# ${project.title}\n_${project.subtitle}_\n\n---\n\n`;
+  let fullManuscript = `# ${project.title}\n_${project.subtitle}_\n\n---\n\n`;
+  project.storyHierarchy.forEach((act, actIdx) => {
+    fullManuscript += `# ${act.title}\n*Theme: ${act.theme}*\n\n`;
+    act.chapters.forEach((chap, chapIdx) => {
+      const chapTitle = chap.title || `Chapter ${chapIdx + 1}`;
+      const chapContent = chap.fullChapterMarkdown || `_${chap.summary}_\n\n*(Chapter draft in progress)*\n`;
+      fullManuscript += `\n${chapContent}\n\n---\n\n`;
 
-    project.storyHierarchy.forEach((act, actIdx) => {
-      fullManuscript += `# ${act.title}\n*Theme: ${act.theme}*\n\n`;
-      act.chapters.forEach((chap, chapIdx) => {
-        const chapTitle = chap.title || `Chapter ${chapIdx + 1}`;
-        const chapContent = chap.fullChapterMarkdown || `_${chap.summary}_\n\n*(Chapter draft in progress)*\n`;
-        fullManuscript += `\n${chapContent}\n\n---\n\n`;
-
-        const safeChapTitle = `Act${actIdx + 1}_${chapTitle.replace(/[/\\?%*:|"<>]/g, "-")}.md`;
-        novelFolder.file(safeChapTitle, chapContent);
-      });
+      const safeChapTitle = `Act${actIdx + 1}_${safeName(chapTitle)}.md`;
+      files[`novel/${safeChapTitle}`] = chapContent;
     });
-
-    novelFolder.file("FULL_MANUSCRIPT.md", fullManuscript);
-  }
+  });
+  files["novel/FULL_MANUSCRIPT.md"] = fullManuscript;
 
   // Data JSON backup
-  zip.file("project-backup.json", JSON.stringify(project, null, 2));
+  files["project-backup.json"] = JSON.stringify(project, null, 2);
 
   // Timeline CSV / Summary
   let timelineDoc = `# Colony Timeline & Chronicle Logs\n\n`;
@@ -88,8 +80,17 @@ Generated with RimChronicle Storyteller Studio.
   project.timelineEvents.forEach((e) => {
     timelineDoc += `| ${e.timestamp} | ${e.title} | ${e.category} | ${e.threatLevel} | ${e.location} | ${e.description.replace(/\|/g, "/")} |\n`;
   });
-  zip.file("TIMELINE.md", timelineDoc);
+  files["TIMELINE.md"] = timelineDoc;
 
+  return files;
+}
+
+export async function exportProjectToMarkdownZip(project: StoryProject): Promise<Blob> {
+  const zip = new JSZip();
+  const files = buildWikiExportFiles(project);
+  Object.entries(files).forEach(([relPath, content]) => {
+    zip.file(relPath, content);
+  });
   return await zip.generateAsync({ type: "blob" });
 }
 
