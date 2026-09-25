@@ -150,7 +150,7 @@ export function createFreshProject(title: string): StoryProject {
 export function getSampleProject(): StoryProject {
   const stored = loadWiki(SAMPLE_WIKI_ID);
   if (stored) return stored;
-  const sample = clone(SAMPLE_PROJECT);
+  const sample = migrateProjectTaxonomy(clone(SAMPLE_PROJECT));
   saveWiki(sample);
   return sample;
 }

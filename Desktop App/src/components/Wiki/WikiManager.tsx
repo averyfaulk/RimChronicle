@@ -206,7 +206,8 @@ export const WikiManager: React.FC<WikiManagerProps> = ({
         (childrenMap.get(id) || []).forEach((c) => collect(c.id));
       };
       articles.forEach((a) => {
-        if (!a.parentId && (activeCategory === "All" || a.category === activeCategory)) {
+        const catId = entryByLabel(tax.articleCategories, a.category)?.id || a.category;
+        if (!a.parentId && (activeCategory === "All" || catId === activeCategory)) {
           collect(a.id);
         }
       });

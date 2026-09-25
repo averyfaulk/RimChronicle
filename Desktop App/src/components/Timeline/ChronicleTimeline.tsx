@@ -201,7 +201,9 @@ export const ChronicleTimeline: React.FC<ChronicleTimelineProps> = ({
   const filteredEvents = useMemo(() => {
     return project.timelineEvents.filter((e) => {
       if (!showFiller && e.isDowntimeFiller) return false;
-      const matchCat = selectedCategory === "All" || e.category === selectedCategory;
+      const matchCat =
+        selectedCategory === "All" ||
+        (entryByLabel(tax.eventCategories, e.category)?.id || e.category) === selectedCategory;
       const matchThreat = selectedThreat === "All" || e.threatLevel === selectedThreat;
       const matchPart =
         selectedParticipant === "All" ||

@@ -23,6 +23,7 @@ import {
   extractLegacyBionics,
   sanitizeCharacterArticleSections,
 } from "./wikiParser";
+import { getTaxonomy, entryByLabel, hasFlag } from "./taxonomy";
 
 export { BIONICS_SLOT_ID, HEALTH_SLOT_ID, SKILLS_SLOT_ID };
 
@@ -99,8 +100,10 @@ export function migrateProjectSlots(project: StoryProject): StoryProject {
   // pages — strip stale static copies from article markdown so they never
   // drift from the live data.
   let articlesChanged = false;
+  const isCharacterCategory = (category: string) =>
+    hasFlag(entryByLabel(getTaxonomy(project).articleCategories, category), "is-character");
   const wikiArticles = (project.wikiArticles || []).map((art) => {
-    if (art.category !== "Characters") return art;
+    if (!isCharacterCategory(art.category)) return art;
     const cleaned = sanitizeCharacterArticleSections(art.markdownContent, config);
     if (cleaned === art.markdownContent) return art;
     articlesChanged = true;

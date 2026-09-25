@@ -10,6 +10,7 @@ import { selectClasses } from "../../lib/uiTheme";
 import { useLexicon } from "../../lib/lexicon";
 import { applySlotInputs, getSlotEntries } from "../../lib/attributeSlots";
 import { resolveSlotConfig, sanitizeCharacterArticleSections } from "../../lib/wikiParser";
+import { getTaxonomy, entryByLabel, hasFlag } from "../../lib/taxonomy";
 
 const CHARACTER_STATUSES: CharacterStatus[] = [
   "Active",
@@ -190,7 +191,8 @@ export const CharacterEditModal: React.FC<CharacterEditModalProps> = ({
     // Traits & attribute slots live in the Dossier card — strip any stale
     // static copies from the linked article so they never drift.
     wikiArticles = wikiArticles.map((a) =>
-      a.title.toLowerCase() === name.toLowerCase() && a.category === "Characters"
+      a.title.toLowerCase() === name.toLowerCase() &&
+      hasFlag(entryByLabel(getTaxonomy(project).articleCategories, a.category), "is-character")
         ? {
             ...a,
             markdownContent: sanitizeCharacterArticleSections(
