@@ -98,6 +98,9 @@ function loadSettings() {
       const model = raw?.selectedModels?.[id];
       if (typeof model === "string" && model.trim()) aiRuntime.selectedModels[id] = model.trim();
     }
+    if (typeof raw?.apiKey === "string" && raw.apiKey.trim()) {
+      OPENCODE_API_KEY = raw.apiKey.trim();
+    }
   } catch {
     /* Missing or corrupt settings file — keep defaults */
   }
@@ -110,7 +113,11 @@ function saveSettings() {
     fs.writeFileSync(
       settingsFile,
       JSON.stringify(
-        { provider: aiRuntime.provider, selectedModels: aiRuntime.selectedModels },
+        {
+          provider: aiRuntime.provider,
+          selectedModels: aiRuntime.selectedModels,
+          apiKey: OPENCODE_API_KEY,
+        },
         null,
         2
       )
@@ -197,7 +204,9 @@ async function requestChatCompletion(
 
 async function callModel(prompt: string, systemInstruction?: string, responseJson?: boolean) {
   if (!OPENCODE_API_KEY) {
-    throw new Error("OPENCODE_API_KEY is not set. Add it to your .env file (see .env.example).");
+    throw new Error(
+      "No OpenCode API key is set. Enter one in the app header → Settings → OpenCode API Key."
+    );
   }
 
   try {
@@ -257,6 +266,8 @@ async function handleConfigGet(): Promise<AiResponse> {
   return ok({
     provider: aiRuntime.provider,
     model: resolveModel(aiRuntime.provider),
+    hasApiKey: Boolean(OPENCODE_API_KEY),
+    keyHint: OPENCODE_API_KEY ? `…${OPENCODE_API_KEY.slice(-4)}` : "",
     providers: (Object.keys(PROVIDER_META) as AIProviderId[]).map((id) => ({
       id,
       label: PROVIDER_META[id].label,
@@ -267,35 +278,49 @@ async function handleConfigGet(): Promise<AiResponse> {
 }
 
 async function handleConfigPost(body: any): Promise<AiResponse> {
-  const { provider, model } = body || {};
+  const { provider, model, apiKey } = body || {};
 
-  if (typeof provider !== "string" || !(provider.toLowerCase() in PROVIDER_META)) {
-    return fail(400, { error: "Unknown provider. Use 'zen' or 'go'." });
+  if (provider !== undefined && provider !== null) {
+    if (typeof provider !== "string" || !(provider.toLowerCase() in PROVIDER_META)) {
+      return fail(400, { error: "Unknown provider. Use 'zen' or 'go'." });
+    }
+
+    if (model !== undefined && model !== null && typeof model !== "string") {
+      return fail(400, { error: "'model' must be a string model ID." });
+    }
+
+    aiRuntime.provider = provider.toLowerCase() as AIProviderId;
+    if (typeof model === "string" && model.trim()) {
+      aiRuntime.selectedModels[aiRuntime.provider] = model.trim();
+    }
   }
 
-  if (model !== undefined && model !== null && typeof model !== "string") {
-    return fail(400, { error: "'model' must be a string model ID." });
-  }
-
-  aiRuntime.provider = provider.toLowerCase() as AIProviderId;
-  if (typeof model === "string" && model.trim()) {
-    aiRuntime.selectedModels[aiRuntime.provider] = model.trim();
+  if (apiKey !== undefined) {
+    if (typeof apiKey !== "string") {
+      return fail(400, { error: "'apiKey' must be a string." });
+    }
+    OPENCODE_API_KEY = apiKey.trim();
   }
 
   saveSettings();
   console.log(
-    `AI provider switched to ${PROVIDER_META[aiRuntime.provider].label} (model: ${resolveModel(aiRuntime.provider)})`
+    `AI provider switched to ${PROVIDER_META[aiRuntime.provider].label} (model: ${resolveModel(aiRuntime.provider)})` +
+      (OPENCODE_API_KEY ? " [api key set]" : " [no api key]")
   );
 
   return ok({
     provider: aiRuntime.provider,
     model: resolveModel(aiRuntime.provider),
+    hasApiKey: Boolean(OPENCODE_API_KEY),
+    keyHint: OPENCODE_API_KEY ? `…${OPENCODE_API_KEY.slice(-4)}` : "",
   });
 }
 
 async function handleModels(query: Record<string, string> | undefined): Promise<AiResponse> {
   if (!OPENCODE_API_KEY) {
-    return fail(400, { error: "OPENCODE_API_KEY is not set. Add it to your .env file." });
+    return fail(400, {
+      error: "No OpenCode API key is set. Enter one in the app header → Settings → OpenCode API Key.",
+    });
   }
 
   const provider = resolveProvider(query?.provider);

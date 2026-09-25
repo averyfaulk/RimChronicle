@@ -20,9 +20,15 @@ import {
   ScrollText,
   Settings,
   Layers3,
-  Dices
+  Dices,
+  KeyRound,
+  Eye,
+  EyeOff,
+  Check,
+  Loader2
 } from "lucide-react";
 import { ActiveTab, ThemeMode, StoryProject } from "../types";
+import { aiFetch } from "../lib/aiClient";
 import { AIModelPicker } from "./AI/AIModelPicker";
 import { LexiconMode, LEXICON_OPTIONS, useLexicon } from "../lib/lexicon";
 import { selectClasses } from "../lib/uiTheme";
@@ -64,6 +70,60 @@ export const Navigation: React.FC<NavigationProps> = ({
   const lex = useLexicon();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const settingsRef = useRef<HTMLDivElement | null>(null);
+
+  // OpenCode API key management (stored on-device by the backend).
+  const [apiKeyState, setApiKeyState] = useState({ hasKey: false, keyHint: "" });
+  const [apiKeyDraft, setApiKeyDraft] = useState("");
+  const [apiKeyShow, setApiKeyShow] = useState(false);
+  const [apiKeyBusy, setApiKeyBusy] = useState(false);
+  const [apiKeyError, setApiKeyError] = useState("");
+  const [apiKeyNotice, setApiKeyNotice] = useState("");
+
+  // Refresh the key status whenever the settings popover opens.
+  useEffect(() => {
+    if (!isSettingsOpen) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await aiFetch("/api/ai/config");
+        if (!res.ok) return;
+        const cfg = await res.json();
+        if (!cancelled) {
+          setApiKeyState({ hasKey: !!cfg.hasApiKey, keyHint: cfg.keyHint || "" });
+        }
+      } catch {
+        /* Backend unavailable — keep last known state */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isSettingsOpen]);
+
+  const persistApiKey = async (value: string) => {
+    setApiKeyBusy(true);
+    setApiKeyError("");
+    setApiKeyNotice("");
+    try {
+      const res = await aiFetch("/api/ai/config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ apiKey: value }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to update API key");
+      }
+      const state = await res.json();
+      setApiKeyState({ hasKey: !!state.hasApiKey, keyHint: state.keyHint || "" });
+      setApiKeyDraft("");
+      setApiKeyNotice(value ? "API key saved" : "API key removed");
+    } catch (err: any) {
+      setApiKeyError(err.message || "Failed to update API key");
+    } finally {
+      setApiKeyBusy(false);
+    }
+  };
 
   // Close the settings popover on outside click or Escape.
   useEffect(() => {
@@ -467,6 +527,129 @@ export const Navigation: React.FC<NavigationProps> = ({
                       </span>
                       <span>{isAiMode ? "AI Mode" : "Offline"}</span>
                     </button>
+                  </div>
+
+                  {/* OpenCode API Key */}
+                  <div>
+                    <label
+                      htmlFor="input-ai-api-key"
+                      className="text-[10px] font-mono uppercase opacity-60 block mb-1.5"
+                    >
+                      OpenCode API Key
+                    </label>
+                    <div
+                      className={`flex items-center rounded-lg border overflow-hidden ${
+                        theme === "dark"
+                          ? "bg-[#121216] border-[#222228] focus-within:border-amber-500/60"
+                          : theme === "parchment"
+                          ? "bg-amber-100 border-amber-300 focus-within:border-amber-700"
+                          : "bg-slate-900 border-cyan-900 focus-within:border-cyan-500"
+                      }`}
+                    >
+                      <KeyRound
+                        className={`w-3.5 h-3.5 ml-2 shrink-0 ${
+                          apiKeyState.hasKey ? "text-emerald-500" : "opacity-40"
+                        }`}
+                      />
+                      <input
+                        id="input-ai-api-key"
+                        type={apiKeyShow ? "text" : "password"}
+                        value={apiKeyDraft}
+                        onChange={(e) => {
+                          setApiKeyDraft(e.target.value);
+                          setApiKeyNotice("");
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && apiKeyDraft.trim()) persistApiKey(apiKeyDraft.trim());
+                        }}
+                        placeholder={
+                          apiKeyState.hasKey ? "••••••••••••" : "Enter your OpenCode API key"
+                        }
+                        autoComplete="off"
+                        spellCheck={false}
+                        className={`w-full px-2 py-1.5 text-xs outline-none placeholder:opacity-40 ${
+                          theme === "dark"
+                            ? "bg-transparent text-[#e2e8f0]"
+                            : theme === "parchment"
+                            ? "bg-transparent text-stone-900"
+                            : "bg-transparent text-cyan-50"
+                        }`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setApiKeyShow(!apiKeyShow)}
+                        className={`p-1.5 opacity-50 hover:opacity-100 transition-opacity shrink-0 ${
+                          apiKeyShow ? "text-amber-500" : ""
+                        }`}
+                        title={apiKeyShow ? "Hide API key" : "Show API key"}
+                      >
+                        {apiKeyShow ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 mt-1.5">
+                      <span
+                        className={`text-[10px] truncate ${
+                          apiKeyState.hasKey ? "text-emerald-500" : "opacity-50"
+                        }`}
+                        title={
+                          apiKeyState.hasKey
+                            ? "A personal OpenCode API key is configured for this device"
+                            : "AI calls will fail until an API key is set"
+                        }
+                      >
+                        {apiKeyState.hasKey
+                          ? `Key set · ${apiKeyState.keyHint || ""}`
+                          : "No key set — AI calls will fail"}
+                      </span>
+                      <div className="flex items-center gap-1 shrink-0">
+                        {apiKeyState.hasKey && (
+                          <button
+                            type="button"
+                            id="btn-clear-api-key"
+                            onClick={() => persistApiKey("")}
+                            disabled={apiKeyBusy}
+                            className={`px-2 py-1 rounded text-[10px] font-semibold border transition-colors disabled:opacity-40 ${
+                              theme === "dark"
+                                ? "border-[#25252e] text-zinc-400 hover:text-red-400 hover:border-red-500/50"
+                                : theme === "parchment"
+                                ? "border-amber-300 text-stone-600 hover:text-red-700 hover:border-red-400"
+                                : "border-cyan-900 text-cyan-400 hover:text-red-400 hover:border-red-500/50"
+                            }`}
+                          >
+                            Clear
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          id="btn-save-api-key"
+                          onClick={() => apiKeyDraft.trim() && persistApiKey(apiKeyDraft.trim())}
+                          disabled={apiKeyBusy || !apiKeyDraft.trim()}
+                          className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] font-semibold transition-colors disabled:opacity-40 ${
+                            theme === "dark"
+                              ? "bg-amber-500/15 text-amber-400 hover:bg-amber-500/25"
+                              : theme === "parchment"
+                              ? "bg-amber-200 text-amber-950 hover:bg-amber-300"
+                              : "bg-cyan-500/15 text-cyan-300 hover:bg-cyan-500/25"
+                          }`}
+                        >
+                          {apiKeyBusy ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : (
+                            <Check className="w-3 h-3" />
+                          )}
+                          Save
+                        </button>
+                      </div>
+                    </div>
+                    {apiKeyError && (
+                      <p className="text-[10px] text-red-400 italic mt-1 leading-snug">{apiKeyError}</p>
+                    )}
+                    {apiKeyNotice && (
+                      <p className="text-[10px] text-emerald-500 italic mt-1 leading-snug">{apiKeyNotice}</p>
+                    )}
+                    <p className="text-[10px] opacity-50 italic mt-1.5 leading-snug">
+                      Stored locally on this device. Get a key at opencode.ai/auth.
+                    </p>
                   </div>
 
                   {/* Native Lexicon */}

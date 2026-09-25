@@ -16,6 +16,8 @@ const backend = require(path.join(__dirname, "backend.cjs"));
 // Set RIMCHRONICLE_GPU=1 to keep hardware acceleration.
 if (process.env.RIMCHRONICLE_GPU !== "1") {
   app.disableHardwareAcceleration();
+  app.commandLine.appendSwitch("disable-gpu");
+  app.commandLine.appendSwitch("disable-gpu-compositing");
 }
 
 let mainWindow = null;
@@ -46,6 +48,16 @@ function createWindow() {
   });
 
   mainWindow.once("ready-to-show", () => mainWindow.show());
+
+  // Some Linux setups never fire "ready-to-show" (e.g. broken GL / GPU
+  // process crash), which would leave the window hidden forever. Show it
+  // after a short grace period regardless.
+  const showFallback = setTimeout(() => {
+    if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) {
+      mainWindow.show();
+    }
+  }, 3000);
+  mainWindow.on("closed", () => clearTimeout(showFallback));
 
   mainWindow.on("closed", () => {
     mainWindow = null;
