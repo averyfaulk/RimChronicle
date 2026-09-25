@@ -110,37 +110,13 @@ A local-first Electron desktop app. Everything you write is stored on your devic
 
 ---
 
-## Getting Started
+## Available for Windows and Linux
 
 ### Prerequisites
 
-- Node.js and npm (or Bun)
 - An OpenCode API key for AI features (optional — offline mode works without one)
 
-### Setup
-
-Copy `.env.example` to `.env` and set your key:
-
-```
-OPENCODE_API_KEY="your-key"
-OPENCODE_PROVIDER="zen"   # "zen" (pay-per-use) or "go" (subscription)
-OPENCODE_MODEL="big-pickle"
-```
-
-### Scripts (run from `Desktop App/`)
-
-```bash
-npm install          # install dependencies
-
-npm run dev          # start the Vite dev server in a browser
-npm start            # build + launch the Electron desktop app
-npm run build        # build the renderer + bundle the AI backend
-npm run package      # build + produce installers (NSIS / DMG / AppImage)
-npm run lint         # TypeScript type-check
-npm run clean        # remove build artifacts
-```
-
-### Tech Stack
+## Tech Stack
 
 - **UI**: React 19, TypeScript, Vite 6, Tailwind CSS 4, `react-markdown`, `motion`, `lucide-react`
 - **Desktop shell**: Electron (sandboxed renderer, IPC-only backend), `electron-builder` for packaging
