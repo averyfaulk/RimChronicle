@@ -200,15 +200,19 @@ export const WikiManager: React.FC<WikiManagerProps> = ({
         getAncestorChain(articles, a.id).forEach((p) => relevant.add(p.id));
       });
     } else {
-      // Category chips filter roots; descendants always follow a visible parent.
+      // Category chips filter articles by category; matched sub-articles show
+      // with their ancestor chain so nested articles stay findable.
       const collect = (id: string) => {
         relevant.add(id);
         (childrenMap.get(id) || []).forEach((c) => collect(c.id));
       };
       articles.forEach((a) => {
         const catId = entryByLabel(tax.articleCategories, a.category)?.id || a.category;
-        if (!a.parentId && (activeCategory === "All" || catId === activeCategory)) {
+        if (activeCategory === "All") {
+          if (!a.parentId) collect(a.id);
+        } else if (catId === activeCategory) {
           collect(a.id);
+          getAncestorChain(articles, a.id).forEach((p) => relevant.add(p.id));
         }
       });
     }

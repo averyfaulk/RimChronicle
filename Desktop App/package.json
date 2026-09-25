@@ -1,7 +1,7 @@
 {
   "name": "rimchronicle",
   "private": true,
-  "version": "1.2.1-beta",
+  "version": "1.2.2-beta",
   "description": "Storyteller Wiki & Novel Studio — transform RimWorld playthroughs into AI-narrated colony wikis",
   "author": {
     "name": "RimChronicle Dev",
