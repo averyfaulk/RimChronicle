@@ -768,9 +768,10 @@ export const Navigation: React.FC<NavigationProps> = ({
                     )}
                     <p className="text-[10px] opacity-50 italic mt-1.5 leading-snug">
                       Your wikis are saved here as project files (projects/*.json) plus a
-                      rendered markdown mirror (wiki/, characters/, novel/, README.md,
-                      TIMELINE.md &amp; project-backup.json), all written automatically as
-                      you work. The Export button saves a separate .zip archive.
+                      rendered markdown mirror (wiki/ — a folder tree mirroring your article
+                      nesting, characters/, novel/, README.md, TIMELINE.md &amp;
+                      project-backup.json), all written automatically as you work. The Export
+                      button saves a separate .zip archive.
                     </p>
                   </div>
                 </div>

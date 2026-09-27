@@ -157,6 +157,17 @@ app.whenReady().then(() => {
           }
         }
       }
+      // Children are processed depth-first, so a directory emptied by the sweep
+      // above is safe to drop. Without this, folders left over from an older
+      // export layout (e.g. the retired per-category tree) would linger empty.
+      // The three owned roots stay; only their descendants are removed.
+      if (rel.includes("/") && fs.readdirSync(abs).length === 0) {
+        const target = safeJoin(folder, rel);
+        if (target) {
+          fs.rmdirSync(target);
+          pruned++;
+        }
+      }
     };
     ownedDirs.forEach(pruneDir);
     for (const name of ownedRootFiles) {

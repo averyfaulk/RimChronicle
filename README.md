@@ -104,8 +104,8 @@ A local-first Electron desktop app. Everything you write is stored on your devic
 
 - **AI Log Ingestion** — paste raw playthrough logs and auto-generate characters, timeline events, wiki articles, relationships, and story hierarchy suggestions, merged into your project.
 - **Document Import** — import `.txt`, `.md`, and `.docx` files (or whole folders) and AI-classify them into character/location/faction/relic articles, mirroring your folder hierarchy as nested sub-articles.
-- **Markdown Wiki Export** — one-click `.zip` with `README.md`, `wiki/` (category-nested articles), `characters/`, `novel/` (per-chapter + compiled `FULL_MANUSCRIPT.md`), `TIMELINE.md`, and `project-backup.json`.
-- **Wiki Save Folder** — in the desktop app, pick a folder and the full rendered wiki file set auto-writes to disk as you work.
+- **Markdown Wiki Export** — one-click `.zip` with `README.md`, `wiki/` (folder tree mirroring your article nesting, each file carrying YAML front-matter for category/tags), `characters/`, `novel/` (per-chapter + compiled `FULL_MANUSCRIPT.md`), `TIMELINE.md`, and `project-backup.json`.
+- **Wiki Save Folder** — in the desktop app, pick a folder and the full rendered wiki file set auto-writes to disk as you work. Stale files (and the folders they leave behind) are pruned on every save, so the mirror always matches the current article tree.
 - **Multi-Wiki Library** — every chronicle is saved independently in local storage, with a welcome screen for starting fresh, opening samples, or loading saved wikis.
 
 ---
