@@ -71,6 +71,107 @@ const FALLBACK_EVENT_CATEGORIES =
 const FALLBACK_ARTICLE_CATEGORIES =
   `"Characters" | "Factions" | "Locations" | "Relics" | "Chronicles" | "Lore" | "Battles" | "Travel"`;
 
+/* ------------------------------------------------------------------ */
+/* Token-frugal helpers                                                */
+/*                                                                     */
+/* Everything below exists to shrink the prompt/context sent to the    */
+/* model: compact (non-pretty-printed) serialization, field projection */
+/* (drop heavy unused fields), string/array truncation, and keyword    */
+/* retrieval so handlers only include the context that matters.        */
+/* ------------------------------------------------------------------ */
+
+/** Compact JSON — no pretty-printing (whitespace is pure token waste). */
+function json(x: any): string {
+  try {
+    return JSON.stringify(x);
+  } catch {
+    return String(x ?? "");
+  }
+}
+
+function trim(s: any, max: number): string {
+  if (typeof s !== "string") return "";
+  if (s.length <= max) return s;
+  return s.slice(0, max) + "…";
+}
+
+function cap<T>(arr: T[] | undefined | null, n: number): T[] {
+  return Array.isArray(arr) ? arr.slice(0, n) : [];
+}
+
+function compactCharacter(c: any, maxBio = 140): any {
+  if (!c) return c;
+  return {
+    name: c.name,
+    nickname: c.nickname,
+    role: c.role,
+    faction: c.faction,
+    status: c.status,
+    traits: cap(c.traits, 8),
+    healthConditions: cap(c.healthConditions, 10),
+    bio: trim(c.bio, maxBio),
+    dramaticArc: trim(c.dramaticArc, 140),
+    quote: c.quote ? trim(c.quote, 120) : undefined,
+  };
+}
+
+function compactEvent(e: any): any {
+  if (!e) return e;
+  return {
+    timestamp: e.timestamp,
+    title: e.title,
+    category: e.category,
+    threatLevel: e.threatLevel,
+    participants: cap(e.participants, 6),
+    location: e.location,
+    description: trim(e.description, 200),
+    narrativeImpact: trim(e.narrativeImpact, 120),
+  };
+}
+
+function compactFaction(f: any): any {
+  if (!f) return f;
+  return {
+    name: f.name,
+    type: f.type,
+    stance: f.stance,
+    ideology: f.ideology,
+    leader: f.leader,
+    description: trim(f.description, 160),
+  };
+}
+
+function compactRelationship(r: any): any {
+  if (!r) return r;
+  return { source: r.source, target: r.target, type: r.type, opinion: r.opinion };
+}
+
+function articleExcerpt(a: any, n = 80): any {
+  return {
+    title: a?.title,
+    category: a?.category,
+    excerpt: a?.markdownContent ? a.markdownContent.replace(/\s+/g, " ").trim().slice(0, n) : "",
+  };
+}
+
+// Per-endpoint output caps. Generous so "detailed" results are never clipped,
+// but bounded so a runaway model can't inflate a bill.
+const MAX_TOKENS: Record<string, number> = {
+  "POST /api/ai/ingest-logs": 6000,
+  "POST /api/ai/analyze-plot-gaps": 3000,
+  "POST /api/ai/generate-bridge": 2600,
+  "POST /api/ai/novelize-chapter": 4000,
+  "POST /api/ai/expand-wiki": 3200,
+  "POST /api/ai/ask-chronicler": 2200,
+  "POST /api/ai/estimate-travel-logistics": 1500,
+  "POST /api/ai/generate-relief-march": 3000,
+  "POST /api/ai/generate-location-lore": 1500,
+  "POST /api/ai/downtime-dice": 2000,
+  "POST /api/ai/crossroads": 2600,
+  "POST /api/ai/crossroads-draft": 3200,
+  "POST /api/ai/classify-documents": 4000,
+};
+
 // Runtime-switchable AI configuration. Initial values come from .env /
 // environment, then POST /api/ai/config can change them without a restart.
 const aiRuntime: {
@@ -166,7 +267,8 @@ interface ChatMessageParam {
 async function requestChatCompletion(
   messages: ChatMessageParam[],
   responseJson: boolean,
-  includeJsonFormat: boolean
+  includeJsonFormat: boolean,
+  maxTokens?: number
 ) {
   const provider = aiRuntime.provider;
   const meta = PROVIDER_META[provider];
@@ -178,6 +280,10 @@ async function requestChatCompletion(
     stream: false,
     messages,
   };
+
+  if (maxTokens && maxTokens > 0) {
+    body.max_tokens = maxTokens;
+  }
 
   if (responseJson && includeJsonFormat) {
     body.response_format = { type: "json_object" };
@@ -208,7 +314,12 @@ async function requestChatCompletion(
   return data?.choices?.[0]?.message?.content || "";
 }
 
-async function callModel(prompt: string, systemInstruction?: string, responseJson?: boolean) {
+async function callModel(
+  prompt: string,
+  systemInstruction?: string,
+  responseJson?: boolean,
+  maxTokens?: number
+) {
   if (!OPENCODE_API_KEY) {
     throw new Error(
       "No OpenCode API key is set. Enter one in the app header → Settings → OpenCode API Key."
@@ -223,10 +334,10 @@ async function callModel(prompt: string, systemInstruction?: string, responseJso
 
     // Some Zen/Go models reject response_format — retry once without it on client errors.
     try {
-      return await requestChatCompletion(messages, !!responseJson, true);
+      return await requestChatCompletion(messages, !!responseJson, true, maxTokens);
     } catch (err: any) {
       if (responseJson && err?.status >= 400 && err?.status < 500) {
-        return await requestChatCompletion(messages, !!responseJson, false);
+        return await requestChatCompletion(messages, !!responseJson, false, maxTokens);
       }
       throw err;
     }
@@ -386,17 +497,36 @@ async function handleIngestLogs(body: any): Promise<AiResponse> {
     (tax?.articleCategories || []).find((c: any) => (c.flags || []).includes("is-character"))
       ?.label || "Characters";
 
+  // Compact existing context: entity name lists + short digests instead of full
+  // object dumps, and cap the raw log so we don't re-bill a wall of text.
+  const compactExisting = (() => {
+    const ex = existingData || {};
+    return {
+      characters: (Array.isArray(ex.characters) ? ex.characters : []).map((c: any) =>
+        compactCharacter(c, 80)
+      ),
+      factions: (Array.isArray(ex.factions) ? ex.factions : []).map(compactFaction),
+      timelineEvents: (Array.isArray(ex.timelineEvents) ? ex.timelineEvents : [])
+        .slice(-15)
+        .map(compactEvent),
+      wikiArticles: (Array.isArray(ex.wikiArticles) ? ex.wikiArticles : [])
+        .slice(-20)
+        .map((a: any) => articleExcerpt(a, 120)),
+    };
+  })();
+  const cappedLogs = trim(rawLogs, 12000);
+
   const prompt = `
 You are analyzing playthrough logs, gameplay events, or world-building chronicle notes (such as RimWorld colony stories, sci-fi/fantasy RPG campaigns, or dramatic narratives).
 The chronicle title is: "${playthroughTitle || "Colony Chronicle"}".
 
 Raw Input Text:
 """
-${rawLogs}
+${cappedLogs}
 """
 
-Current Existing Context (if any):
-${JSON.stringify(existingData || {}, null, 2)}
+Current Existing Context (compact digest of known characters, factions, events and wiki articles):
+${json(compactExisting)}
 
 Your task is to analyze these events, extract deep dramatic lore, character arcs, factions, locations, relics, timeline events, character relationships, and generate comprehensive Markdown Wiki Articles.
 
@@ -499,7 +629,8 @@ MANDATORY for every "${charCategory}" category article: include a "## Traits" se
   const rawJson = await callModel(
     prompt,
     "You are a master sci-fi/fantasy chronicler and RimWorld narrative designer. Return ONLY clean JSON without markdown code fences if possible, or standard JSON object.",
-    true
+    true,
+    MAX_TOKENS["POST /api/ai/ingest-logs"]
   );
 
   try {
@@ -523,27 +654,29 @@ You are an expert narrative editor, story doctor, and plot consistency auditor s
 
 Review the following world-building wiki and chronicle data:
 
-Characters:
-${JSON.stringify(characters || [], null, 2)}
+Characters (compact dossiers):
+${json((characters || []).map((c: any) => compactCharacter(c, 120)))}
 
-Timeline Events:
-${JSON.stringify(events || [], null, 2)}
+Timeline Events (most recent ${Math.min(25, (events || []).length)}):
+${json((events || []).slice(-25).map(compactEvent))}
 
-Relationships:
-${JSON.stringify(relationships || [], null, 2)}
+Relationships (source / target / type / opinion):
+${json((relationships || []).map(compactRelationship))}
 
-Storyline Hierarchy & Chapters:
-${JSON.stringify(hierarchy || [], null, 2)}
+Storyline Hierarchy & Chapters (titles only):
+${json((hierarchy || []).map((act: any) => ({
+    actTitle: act.title,
+    theme: act.theme,
+    chapters: (act.chapters || []).map((ch: any) => ch.title),
+  })))}
 
-Wiki Article Titles & Excerpts:
-${JSON.stringify(
-    (wikiArticles || []).map((a: any) => ({
+Wiki Article Titles & Short Excerpts (first 80 chars each, capped at ${Math.min(40, (wikiArticles || []).length)}):
+${json(
+    (wikiArticles || []).slice(0, 40).map((a: any) => ({
       title: a.title,
       category: catLabel(a.category),
-      preview: a.markdownContent ? a.markdownContent.slice(0, 300) : "",
-    })),
-    null,
-    2
+      preview: a.markdownContent ? a.markdownContent.replace(/\s+/g, " ").trim().slice(0, 80) : "",
+    }))
   )}
 
 Perform a deep narrative consistency and plot gap analysis. Look for:
@@ -579,7 +712,8 @@ Respond with a strictly valid JSON object:
   const rawJson = await callModel(
     prompt,
     "You are a professional book editor and narrative architect. Output ONLY valid JSON.",
-    true
+    true,
+    MAX_TOKENS["POST /api/ai/analyze-plot-gaps"]
   );
 
   try {
@@ -595,15 +729,33 @@ async function handleGenerateBridge(body: any): Promise<AiResponse> {
   const tax = body?.taxonomy;
   const evUnion = categoryUnion(tax, "eventCategories", `"Social" | "Tragedy" | "Miracle" | "Combat" | "Discovery"`);
 
+  const ctx = context || {};
+  const ctxChars = Array.isArray(ctx.characters) ? ctx.characters : [];
+  const affected = new Set(
+    (Array.isArray(affectedEntities) ? affectedEntities : []).map((n: any) => String(n).toLowerCase())
+  );
+  const relatedChars = ctxChars
+    .filter(
+      (c: any) =>
+        affected.size === 0 ||
+        affected.has(String(c?.name || "").toLowerCase()) ||
+        affected.has(String(c?.nickname || "").toLowerCase())
+    )
+    .slice(0, 6)
+    .map((c: any) => compactCharacter(c, 120));
+
   const prompt = `
 Create a compelling, canon-consistent literary vignette/scene that bridges this narrative gap in the chronicle:
 
 Gap: ${gapTitle}
-Explanation: ${explanation}
+Explanation: ${trim(explanation, 400)}
 Affected Characters/Factions: ${(affectedEntities || []).join(", ")}
 
 Relevant Story Context:
-${JSON.stringify(context || {})}
+Characters involved:
+${json(relatedChars)}
+Recent Canon Events:
+${json((Array.isArray(ctx.recentEvents) ? ctx.recentEvents : []).slice(-4).map(compactEvent))}
 
 Write a dramatic, emotionally resonant Markdown vignette (approx 400-700 words) with dialogue, sensory details (smell of burning plasteel, freezing mountain air, sound of the comms console), inner thoughts, and use [[WikiLinks]] for characters and locations.
 Also include a short structured event object that can be inserted into the chronicle timeline.
@@ -624,7 +776,12 @@ Respond with JSON:
 }
 `;
 
-  const rawJson = await callModel(prompt, "You are a master science fiction novelist.", true);
+  const rawJson = await callModel(
+    prompt,
+    "You are a master science fiction novelist.",
+    true,
+    MAX_TOKENS["POST /api/ai/generate-bridge"]
+  );
   return ok(parseModelJson(rawJson));
 }
 
@@ -658,6 +815,15 @@ If the plot seems to require breaking a law, invent a grounded, clever workaroun
 `
     : "";
 
+  const evts = (Array.isArray(selectedEvents) ? selectedEvents : []).slice(0, 6);
+  const involved = new Set(
+    evts.flatMap((e: any) => (Array.isArray(e.participants) ? e.participants : [])).map((p: any) => String(p).toLowerCase())
+  );
+  const roster = (Array.isArray(includedCharacters) ? includedCharacters : [])
+    .filter((c: any) => involved.size === 0 || involved.has(String(c?.name || "").toLowerCase()))
+    .slice(0, 8)
+    .map((c: any) => compactCharacter(c, 140));
+
   const prompt = `
 You are a bestselling novelist adapting procedural gameplay logs into a literary masterpiece.
 
@@ -669,10 +835,10 @@ Point of View: ${pointOfView || "Third Person Limited (focusing on key colonist)
 Target Word Count: ${wordCountTarget || "800-1500 words"}
 
 Key Events to dramatize in this chapter:
-${JSON.stringify(selectedEvents || [], null, 2)}
+${json(evts.map(compactEvent))}
 
 Key Characters & Their Arcs:
-${JSON.stringify(includedCharacters || [], null, 2)}
+${json(roster)}
 
 Guidelines:
 - Write in rich, expressive Markdown format.
@@ -687,7 +853,9 @@ Begin writing the chapter now.
 
   const novelText = await callModel(
     prompt,
-    "You are an acclaimed science fiction author known for deep character studies and gripping prose."
+    "You are an acclaimed science fiction author known for deep character studies and gripping prose.",
+    false,
+    MAX_TOKENS["POST /api/ai/novelize-chapter"]
   );
 
   return ok({ chapterTitle, novelContent: novelText });
@@ -709,18 +877,45 @@ async function handleExpandWiki(body: any): Promise<AiResponse> {
       ?.label || "Characters";
   const isChar = category === charCatId || /character/i.test(category);
 
+  // Only pull context tied to this article's subject (title keyword match) so we
+  // don't re-bill the whole project on every expand.
+  const ctx = context || {};
+  const titleLow = String(articleTitle || "").toLowerCase();
+  const matches = (name?: string) =>
+    Boolean(name) && titleLow.includes(String(name).toLowerCase());
+  const relatedChars = (Array.isArray(ctx.characters) ? ctx.characters : [])
+    .filter((c: any) => matches(c?.name) || matches(c?.nickname) || matches(c?.role))
+    .slice(0, 5)
+    .map((c: any) => compactCharacter(c, 140));
+  const relatedEvents = (Array.isArray(ctx.timelineEvents) ? ctx.timelineEvents : [])
+    .filter((e: any) => matches(e?.title) || matches(e?.location))
+    .slice(-6)
+    .map(compactEvent);
+  const relatedFactions = (Array.isArray(ctx.factions) ? ctx.factions : [])
+    .filter((f: any) => matches(f?.name))
+    .slice(0, 4)
+    .map(compactFaction);
+  const worldContext = {
+    characters: relatedChars,
+    timelineEvents: relatedEvents,
+    factions: relatedFactions,
+    allArticleTitles: (Array.isArray(ctx.wikiArticles) ? ctx.wikiArticles : []).slice(0, 60).map((a: any) =>
+      typeof a === "string" ? a : a.title
+    ),
+  };
+
   const prompt = `
 You are expanding or refining a world-building Wiki article titled "${articleTitle}" (Category: ${catLabel}).
 
 Current Content:
 """
-${currentContent || "(New article)"}
+${currentContent ? trim(currentContent, 6000) : "(New article)"}
 """
 
 User Instruction: "${promptInstruction || "Expand with deep historical lore, psychological nuances, relationships, and chronological records."}"
 
-World Context:
-${JSON.stringify(context || {})}
+World Context (entities tied to this article):
+${json(worldContext)}
 
 Write the complete updated Markdown article.
 - Use structured markdown with headers (## Biography, ## Psychological Profile, ## Key Relationships, ## Combat & Medical Record, ## Colony Legacy).
@@ -731,29 +926,128 @@ ${isChar ? `- MANDATORY: include a "## Traits" section listing personality trait
 
   const expandedMarkdown = await callModel(
     prompt,
-    "You are a senior world-building archivist and wiki creator."
+    "You are a senior world-building archivist and wiki creator.",
+    false,
+    MAX_TOKENS["POST /api/ai/expand-wiki"]
   );
 
   return ok({ markdownContent: expandedMarkdown });
 }
 
 // 6. Ask Chronicler / Loremaster AI
+//
+// Token-frugal design (see also src/lib/aiContext.ts):
+//  - The renderer retrieves ONLY the wiki articles + entity dossiers relevant
+//    to the current question and sends a compact payload.
+//  - The prompt is built as a STABLE cached prefix (system prompt + canonical
+//    world record — byte-identical across every call in the session so the
+//    OpenCode gateway's x-opencode-session prompt cache is reused) followed by
+//    a small per-message delta (retrieved excerpts, chat tail, question).
+//  - The instruction is "grounded, not restricted": canon is authoritative and
+//    must never be contradicted, but the Chronicler is fully free to generate
+//    new lore, dialogue, twists, and flash fiction that extrapolates from it.
+const ARCHIVIST_SYSTEM = `You are the Colony Chronicler and World Archivist, an in-universe storyteller with complete knowledge of the chronicle's wiki, timeline, relationships, characters, and factions.
+
+GROUNDING RULE — never contradict canon:
+The "CANONICAL WORLD RECORD" and any "RETRIEVED WIKI EXCERPTS" in the Overseer's message are the authoritative records of this world. Every character, relationship, event, trait, and fact you reference must be consistent with them. Never contradict established facts.
+
+CREATIVE LICENSE:
+You are fully free to invent new lore, dialogue, dramatic scenes, twists, betrayals, psychological insight, and flash fiction as the Overseer requests. Extrapolate richly from the canon records — inventing detail is expected and encouraged — but never break what is established.
+
+QUERY FRAMING:
+- If the Overseer asks a factual canon question, answer from the records. If the answer is genuinely not present in the provided records, say so plainly rather than inventing it.
+- If the Overseer asks for creative writing, worldbuilding, or narrative generation, generate it freely and mark clearly-new material as the Chronicler's extrapolation where it helps.
+
+Use [[WikiLinks]] ([[Entity Name]]) when referencing known entities. Write with literary depth and in-universe voice.`;
+
 async function handleAskChronicler(body: any): Promise<AiResponse> {
-  // The UI sends query/context; the original server used question/persona/fullContext.
   const question = body?.question ?? body?.query;
-  const persona = body?.persona;
   const fullContext = body?.fullContext ?? body?.context;
 
-  const systemPrompt = `
-You are the Colony Chronicler and World Archivist (Persona: ${persona || "The Ancient Archotech Storyteller"}).
-You possess comprehensive knowledge of the playthrough events, character psychological records, relationship webs, and world lore.
-Answer the user's creative writing or world-building inquiry thoughtfully with literary depth, narrative ideas, and lore consistency checks.
-Use [[WikiLinks]] when referencing entities.
+  // New compact payload shape: renderer sends canonBlock + matched excerpts.
+  const canonBlock = body?.canonBlock;
+  const matchedArticles = Array.isArray(body?.matchedArticles) ? body.matchedArticles : [];
+  const matchedEntities = body?.matchedEntities || {};
+  const recentEvents = Array.isArray(body?.recentEvents) ? body.recentEvents : [];
+  const relationships = Array.isArray(body?.relationships) ? body.relationships : [];
+  const chatTail = Array.isArray(body?.chatTail) ? body.chatTail : [];
+
+  if (!question || typeof question !== "string") {
+    return fail(400, { error: "No question provided" });
+  }
+
+  let prompt: string;
+
+  if (typeof canonBlock === "string" && canonBlock.trim()) {
+    const excerpts = matchedArticles
+      .map(
+        (a: any) =>
+          `### ${a.title || "Unknown"}${a.category ? ` (${a.category})` : ""}\n${a.markdownContent || ""}`
+      )
+      .join("\n\n");
+    const entities = matchedEntities;
+    const entityDossiers =
+      `Characters:\n${json((entities.characters || []).map((c: any) => compactCharacter(c, 140)))}\n\n` +
+      `Factions:\n${json((entities.factions || []).map(compactFaction))}\n\n` +
+      `Locations:\n${json(
+        (entities.locations || []).map((l: any) => ({
+          name: l.name,
+          type: l.type,
+          dangerLevel: l.dangerLevel,
+          description: trim(l.description, 120),
+        }))
+      )}`;
+    const tailText = chatTail
+      .map((m: any) => (m.role === "user" ? `Overseer: ${trim(m.text, 500)}` : `Chronicler: ${trim(m.text, 500)}`))
+      .join("\n");
+
+    prompt = `
+CANONICAL WORLD RECORD (authoritative, stable):
+${canonBlock}
+
+RETRIEVED WIKI EXCERPTS (from the colony archive, relevant to the current request):
+${excerpts || "(No wiki excerpts retrieved — draw only from the canonical record above.)"}
+
+ENTITY DOSSIERS (relevant to the current request):
+${entityDossiers}
+
+RECENT CANON EVENTS:
+${json(recentEvents)}
+
+RELATIONSHIP WEB:
+${json(relationships)}
+
+${tailText ? `RECENT CONVERSATION (prior exchanges in this session):\n${tailText}\n` : ""}
+OVERSEER'S REQUEST:
+${question}
 `;
+  } else {
+    // Legacy payload fallback — compact whatever we received.
+    prompt = `
+CANONICAL WORLD RECORD:
+${json({
+      title: fullContext?.title,
+      characters: (fullContext?.characters || []).map((c: any) => compactCharacter(c, 120)),
+      factions: (fullContext?.factions || []).map(compactFaction),
+      timelineEvents: (fullContext?.timelineEvents || []).slice(-10).map(compactEvent),
+      relationships: (fullContext?.relationships || []).map(compactRelationship),
+      recentArticles: (fullContext?.recentArticles || []).map((a: any) => ({
+        title: a.title,
+        category: a.category,
+        excerpt: trim(a.summary || a.excerpt || "", 120),
+      })),
+    })}
+
+OVERSEER'S REQUEST:
+${question}
+`;
+  }
 
   const answer = await callModel(
-    `Context:\n${JSON.stringify(fullContext || {}, null, 2)}\n\nQuestion / Writing Prompt:\n${question}`,
-    systemPrompt
+    prompt,
+    ARCHIVIST_SYSTEM,
+    false,
+    MAX_TOKENS["POST /api/ai/ask-chronicler"]
   );
 
   return ok({ answer });
@@ -784,8 +1078,8 @@ Departure: "${sourceLocation?.name}" (Biome: ${biomeLabel(sourceLocation?.biome)
 Destination: "${targetLocation?.name}" (Biome: ${biomeLabel(targetLocation?.biome) || "Unknown"}, Danger: ${targetLocation?.dangerLevel})
 Calculated Distance: ${distanceHexes} hexes (~${distanceKm} km)
 Caravan Mode: ${caravanMode || "On Foot Forced March"}
-Caravan Roster: ${JSON.stringify(caravanMembers || ["3 Colonists, Pack Animal"])}
-World Story Context: ${JSON.stringify(projectContext || {})}
+Caravan Roster: ${json((Array.isArray(caravanMembers) ? caravanMembers : ["3 Colonists, Pack Animal"]).slice(0, 8))}
+World Story Context: ${json(projectContext || {})}
 
 Provide a comprehensive narrative logistics assessment with potential procedural crises, terrain challenges, and dramatic story hooks.
 
@@ -812,7 +1106,8 @@ Respond in JSON format:
   const rawJson = await callModel(
     prompt,
     "You are an expert RimWorld storyteller and military logistician.",
-    true
+    true,
+    MAX_TOKENS["POST /api/ai/estimate-travel-logistics"]
   );
 
   return ok(parseModelJson(rawJson));
@@ -842,10 +1137,10 @@ You are a novelist dramatizing a desperate, high-stakes military relief march ac
 Situation:
 - Remote Outpost Under Threat: "${targetOutpost?.name}" (Biome: ${biomeLabel(targetOutpost?.biome)}, Danger: ${targetOutpost?.dangerLevel})
 - Immediate Crisis / Threat: "${crisisTrigger || "Enemy mortar siege & mechanoid assault breach"}"
-- Outpost Defenders: ${JSON.stringify(defendingColonists || ["Isolated mining crew"])}
+- Outpost Defenders: ${json((Array.isArray(defendingColonists) ? defendingColonists : ["Isolated mining crew"]).slice(0, 8))}
 - Main Colony: "${sourceColony?.name}" (${travelDays || "4"} Days travel away on foot)
-- Dispatched Relief Team: ${JSON.stringify(reliefColonists || ["Colony Vanguard"])}
-- Story Context: ${JSON.stringify(projectContext || {})}
+- Dispatched Relief Team: ${json((Array.isArray(reliefColonists) ? reliefColonists : ["Colony Vanguard"]).slice(0, 8))}
+- Story Context: ${json(projectContext || {})}
 
 Task:
 Write a gripping, multi-phase dramatic relief march narrative that weaves together the countdown at the burning outpost with the brutal forced march across freezing/hostile terrain.
@@ -861,7 +1156,7 @@ Respond in JSON format:
     "category": ${evUnion},
     "threatLevel": "Catastrophic" | "Major",
     "location": "${targetOutpost?.name || "Remote Outpost"}",
-    "participants": ${(reliefColonists && reliefColonists.length > 0) ? JSON.stringify(reliefColonists) : '["Cole Briggs", "Dr. Valerie Vance"]'},
+    "participants": ${(reliefColonists && reliefColonists.length > 0) ? json(reliefColonists.slice(0, 8)) : '["Cole Briggs", "Dr. Valerie Vance"]'},
     "description": "2-3 sentences summarizing the relief force's arrival and the outcome of the siege.",
     "narrativeImpact": "Outpost saved at heavy cost, establishing a secure defensive perimeter across the sector."
   },
@@ -881,7 +1176,8 @@ Respond in JSON format:
   const rawJson = await callModel(
     prompt,
     "You are a bestselling sci-fi author specializing in tactical military desperation and RimWorld frontier sagas.",
-    true
+    true,
+    MAX_TOKENS["POST /api/ai/generate-relief-march"]
   );
 
   return ok(parseModelJson(rawJson));
@@ -907,7 +1203,7 @@ Location Name: "${name}"
 Type: "${typeLabel}"
 Biome: "${biomeLabel}"
 Threat Rating: "${dangerLevel}"
-Context: ${JSON.stringify(projectContext || {})}
+Context: ${json(projectContext || {})}
 
 Respond in JSON format:
 {
@@ -922,7 +1218,12 @@ Respond in JSON format:
 }
 `;
 
-  const rawJson = await callModel(prompt, "You are a master world-building archivist.", true);
+  const rawJson = await callModel(
+    prompt,
+    "You are a master world-building archivist.",
+    true,
+    MAX_TOKENS["POST /api/ai/generate-location-lore"]
+  );
   return ok(parseModelJson(rawJson));
 }
 
@@ -953,19 +1254,22 @@ DOWNTIME FREQUENCY SETTING: ${frequencyLabel || "1 Event per Day"} — snippets 
 SNIPPETS TO GENERATE: exactly ${count}.
 
 THE ACTIVE SCENE (colonists here are busy ON-SCREEN — do NOT feature them):
-${JSON.stringify(activeSceneEvent || {}, null, 2)}
+${json(activeSceneEvent || {})}
 
 ELIGIBLE OFF-SCREEN COLONISTS (feature ONLY these; every snippet must use 1-2 of them and align tightly with each pawn's traits, current health conditions, and bionics/augmentations):
-${JSON.stringify(eligibleColonists || [], null, 2)}
+${json((eligibleColonists || []).slice(0, 10))}
 
 RECENT CANON EVENTS (avoid contradicting or repeating these):
-${JSON.stringify((recentEvents || []).slice(-5), null, 2)}
+${json((recentEvents || []).slice(-5).map(compactEvent))}
 
 KNOWN LOCATIONS (use realistic colony locations from this list when fitting):
-${JSON.stringify(locations || [], null, 2)}
+${json((locations || []).slice(0, 12))}
 
 COLONY CONTEXT:
-${JSON.stringify(colonyContext || {}, null, 2)}
+${json({
+    title: colonyContext?.title,
+    factions: (colonyContext?.factions || []).slice(0, 8).map(compactFaction),
+  })}
 
 Rules:
 - Mix mundane slice-of-life beats (cooking disasters, workshop tinkering, animal handling, letters home) with occasional low-key drama (mood spirals, minor injuries, tense arguments) — roughly 60% mundane / 40% dramatic.
@@ -996,7 +1300,8 @@ Respond with a strictly valid JSON object:
   const rawJson = await callModel(
     prompt,
     "You are a master of slice-of-life procedural storytelling inside harsh sci-fi survival colonies. Output ONLY valid JSON.",
-    true
+    true,
+    MAX_TOKENS["POST /api/ai/downtime-dice"]
   );
 
   try {
@@ -1032,19 +1337,27 @@ CHRONICLE TITLE: "${projectTitle || "Colony Chronicle"}"
 CURRENT TIMELINE DATE (the branching point): ${anchorDate || "unknown"} (${quadrumYear || "unknown year"})
 
 COLONISTS (statuses, traits, health conditions and dramatic arcs drive mood analysis):
-${JSON.stringify(characters || [], null, 2)}
+${json((characters || []).map((c: any) => compactCharacter(c, 120)))}
 
 RECENT CANONICAL EVENTS (the living history that creates tension):
-${JSON.stringify((events || []).slice(-8), null, 2)}
+${json((events || []).slice(-8).map(compactEvent))}
 
 FACTIONS (stances and ideologies define external threats):
-${JSON.stringify(factions || [], null, 2)}
+${json((factions || []).slice(0, 10).map(compactFaction))}
 
 KNOWN LOCATIONS (food production, resources and hazards live here):
-${JSON.stringify(locations || [], null, 2)}
+${json(
+    (locations || []).slice(0, 12).map((l: any) => ({
+      name: l.name,
+      type: l.type,
+      biome: l.biome,
+      dangerLevel: l.dangerLevel,
+      activeResources: cap(l.activeResources, 5),
+    }))
+  )}
 
 CHARACTER RELATIONSHIPS (grudges, romances and rivalries are tinder):
-${JSON.stringify(relationships || [], null, 2)}
+${json((relationships || []).map(compactRelationship))}
 
 Your task:
 1. First build a "colonySnapshot": analyze the colonists' statuses/traits/health to estimate an overall mood average; use location resources plus recent event context to assess food supply; derive major active threats from hostile factions and recent events; and summarize the most charged interpersonal or situational tension right now.
@@ -1078,7 +1391,8 @@ Respond with a strictly valid JSON object:
   const rawJson = await callModel(
     prompt,
     "You are a master RimWorld storyteller and dramatic tension analyst. Output ONLY valid JSON.",
-    true
+    true,
+    MAX_TOKENS["POST /api/ai/crossroads"]
   );
 
   try {
@@ -1115,22 +1429,28 @@ CHRONICLE TITLE: "${projectTitle || "Colony Chronicle"}"
 CURRENT TIMELINE DATE (scene starts here): ${anchorDate || "unknown"} (${quadrumYear || "unknown year"})
 
 CHOSEN PATH:
-${JSON.stringify(scenario, null, 2)}
+${json(scenario)}
 
 CURRENT COLONY SNAPSHOT:
-${JSON.stringify(colonySnapshot || {}, null, 2)}
+${json(colonySnapshot || {})}
 
 COLONISTS (mirror each speaker's traits, health conditions and dramatic arc in their dialogue):
-${JSON.stringify(characters || [], null, 2)}
+${json((characters || []).map((c: any) => compactCharacter(c, 120)))}
 
 RECENT CANONICAL EVENTS (do not contradict these):
-${JSON.stringify((events || []).slice(-6), null, 2)}
+${json((events || []).slice(-6).map(compactEvent))}
 
 FACTIONS:
-${JSON.stringify(factions || [], null, 2)}
+${json((factions || []).slice(0, 8).map(compactFaction))}
 
 LOCATIONS (ground the scene in a real named place):
-${JSON.stringify(locations || [], null, 2)}
+${json(
+    (locations || []).slice(0, 10).map((l: any) => ({
+      name: l.name,
+      type: l.type,
+      biome: l.biome,
+    }))
+  )}
 
 Your task — produce:
 1. "openingSceneMarkdown": a gripping Markdown scene (approx 400-650 words) that opens exactly at the chosen date and dramatizes the first beat of this path. Include sensory detail, rising tension, and at least one moment of live dialogue between key participants. Use [[Character Name]] and [[Location Name]] wiki-link syntax generously.
@@ -1164,7 +1484,8 @@ Respond with a strictly valid JSON object:
   const rawJson = await callModel(
     prompt,
     "You are an acclaimed science fiction novelist specializing in interactive fiction openings. Output ONLY valid JSON.",
-    true
+    true,
+    MAX_TOKENS["POST /api/ai/crossroads-draft"]
   );
 
   try {
@@ -1196,11 +1517,33 @@ You are importing a set of existing documents into a world-building wiki for the
 
 Each document has already been extracted to (Markdown) text and given a proposed title plus an optional folder path (the folder structure comes from an Obsidian-style vault and should be mirrored into the wiki's sub-article hierarchy).
 
-Documents:
-${JSON.stringify(documents, null, 2)}
+Documents (text truncated to 3000 chars each):
+${json(
+    (documents || []).map((d: any) => ({
+      title: d.title,
+      folderPath: d.folderPath,
+      markdownText: trim(d.markdownText, 3000),
+    }))
+  )}
 
-Current Existing Context (characters, factions, locations, articles — reuse/cross-link these wherever possible):
-${JSON.stringify(existingContext || {}, null, 2)}
+Current Existing Context (compact: names + short excerpts — reuse/cross-link these wherever possible):
+${json(
+    (() => {
+      const ex = existingContext || {};
+      const nameOf = (x: any) => (typeof x === "string" ? x : x?.name);
+      return {
+        characters: (Array.isArray(ex.characters) ? ex.characters : []).map(nameOf),
+        factions: (Array.isArray(ex.factions) ? ex.factions : []).map(nameOf),
+        locations: (Array.isArray(ex.locations) ? ex.locations : []).map(nameOf),
+        relics: (Array.isArray(ex.relics) ? ex.relics : []).map(nameOf),
+        wikiArticles: (Array.isArray(ex.wikiArticles) ? ex.wikiArticles : []).slice(0, 40).map((a: any) =>
+          typeof a === "string"
+            ? { title: a, category: "", preview: "" }
+            : articleExcerpt(a, 100)
+        ),
+      };
+    })()
+  )}
 
 Your task:
 For EVERY document, decide what kind of wiki article it should become. Infer from the document's folder, title, and content:
@@ -1246,7 +1589,8 @@ Keep entity names and titles EXACTLY matching the document/matter being imported
   const rawJson = await callModel(
     prompt,
     "You are a senior world-building archivist importing a document vault into a wiki. Output ONLY valid JSON.",
-    true
+    true,
+    MAX_TOKENS["POST /api/ai/classify-documents"]
   );
 
   try {

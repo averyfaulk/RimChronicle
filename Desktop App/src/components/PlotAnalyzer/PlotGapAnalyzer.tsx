@@ -30,6 +30,13 @@ import { runStaticNarrativeScan } from "../../lib/localEngine";
 import { buildCulturalFrictionGaps } from "../../lib/preceptEngine";
 import { formatRimWorldDate, getCurrentTimelineDate } from "../../lib/downtime";
 import { getTaxonomy } from "../../lib/taxonomy";
+import {
+  compactCharacter,
+  compactEvent,
+  compactRelationship,
+  compactFaction,
+  articleExcerpt,
+} from "../../lib/aiContext";
 
 interface PlotGapAnalyzerProps {
   project: StoryProject;
@@ -83,11 +90,15 @@ export const PlotGapAnalyzer: React.FC<PlotGapAnalyzerProps> = ({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             taxonomy: getTaxonomy(project),
-            characters: project.characters,
-            events: project.timelineEvents,
-            relationships: project.relationships,
-            hierarchy: project.storyHierarchy,
-            wikiArticles: project.wikiArticles,
+            characters: project.characters.map((c) => compactCharacter(c)),
+            events: project.timelineEvents.slice(-25).map(compactEvent),
+            relationships: project.relationships.map(compactRelationship),
+            hierarchy: project.storyHierarchy.map((act) => ({
+              actTitle: act.title,
+              theme: act.theme,
+              chapters: act.chapters.map((ch) => ch.title),
+            })),
+            wikiArticles: project.wikiArticles.slice(0, 40).map((a) => articleExcerpt(a, 80)),
           }),
         });
 
@@ -191,8 +202,15 @@ export const PlotGapAnalyzer: React.FC<PlotGapAnalyzerProps> = ({
           explanation: gap.explanation,
           affectedEntities: gap.affectedEntities,
           context: {
-            characters: project.characters,
-            recentEvents: project.timelineEvents.slice(-5),
+            characters: project.characters
+              .filter((c) =>
+                gap.affectedEntities.some(
+                  (n) => c.name.toLowerCase() === n.toLowerCase() || c.nickname?.toLowerCase() === n.toLowerCase()
+                )
+              )
+              .slice(0, 6)
+              .map((c) => compactCharacter(c)),
+            recentEvents: project.timelineEvents.slice(-5).map(compactEvent),
           },
         }),
       });

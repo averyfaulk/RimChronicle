@@ -78,6 +78,12 @@ import { WifiOff } from "lucide-react";
 import { BUILTIN_TENETS, applyInferredAnalysis, applyPreceptAnalysis } from "../../lib/preceptEngine";
 import { selectClasses } from "../../lib/uiTheme";
 import { useLexicon } from "../../lib/lexicon";
+import {
+  compactCharacter,
+  compactEvent,
+  compactFaction,
+  compactRelationship,
+} from "../../lib/aiContext";
 
 interface ChronicleTimelineProps {
   project: StoryProject;
@@ -416,37 +422,17 @@ export const ChronicleTimeline: React.FC<ChronicleTimelineProps> = ({
             projectTitle: project.title,
             anchorDate: currentTimelineDate ? formatRimWorldDate(currentTimelineDate) : null,
             quadrumYear: currentTimelineDate ? `Year ${currentTimelineDate.year}` : null,
-            characters: project.characters.map((c) => ({
-              name: c.name,
-              nickname: c.nickname,
-              role: c.role,
-              status: c.status,
-              traits: c.traits,
-              healthConditions: c.healthConditions,
-              dramaticArc: c.dramaticArc,
-            })),
-            events: project.timelineEvents.slice(-10).map((e) => ({
-              title: e.title,
-              timestamp: e.timestamp,
-              category: e.category,
-              threatLevel: e.threatLevel,
-              participants: e.participants,
-              description: e.description,
-            })),
-            factions: project.factions.map((f) => ({
-              name: f.name,
-              stance: f.stance,
-              ideology: f.ideology,
-              leader: f.leader,
-            })),
+            characters: project.characters.map((c) => compactCharacter(c, 120)),
+            events: project.timelineEvents.slice(-10).map(compactEvent),
+            factions: project.factions.map(compactFaction),
             locations: project.locations.map((l) => ({
               name: l.name,
               type: l.type,
               biome: l.biome,
               dangerLevel: l.dangerLevel,
-              activeResources: l.activeResources,
+              activeResources: (l.activeResources || []).slice(0, 5),
             })),
-            relationships: project.relationships,
+            relationships: project.relationships.map(compactRelationship),
           }),
         });
 
@@ -538,24 +524,9 @@ export const ChronicleTimeline: React.FC<ChronicleTimelineProps> = ({
           projectTitle: project.title,
           anchorDate: currentTimelineDate ? formatRimWorldDate(currentTimelineDate) : null,
           quadrumYear: currentTimelineDate ? `Year ${currentTimelineDate.year}` : null,
-          characters: project.characters.map((c) => ({
-            name: c.name,
-            nickname: c.nickname,
-            role: c.role,
-            status: c.status,
-            traits: c.traits,
-            healthConditions: c.healthConditions,
-            bio: c.bio,
-            dramaticArc: c.dramaticArc,
-          })),
-          events: project.timelineEvents.slice(-8).map((e) => ({
-            title: e.title,
-            timestamp: e.timestamp,
-            category: e.category,
-            threatLevel: e.threatLevel,
-            description: e.description,
-          })),
-          factions: project.factions.map((f) => ({ name: f.name, stance: f.stance })),
+          characters: project.characters.map((c) => compactCharacter(c, 120)),
+          events: project.timelineEvents.slice(-8).map(compactEvent),
+          factions: project.factions.map(compactFaction),
           locations: project.locations.map((l) => ({
             name: l.name,
             type: l.type,

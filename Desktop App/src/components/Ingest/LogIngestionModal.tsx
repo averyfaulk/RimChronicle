@@ -29,6 +29,12 @@ import {
   pickFolder,
   filenameToTitle,
 } from "../../lib/documentImport";
+import {
+  compactCharacter,
+  compactEvent,
+  compactFaction,
+  articleExcerpt,
+} from "../../lib/aiContext";
 
 interface LogIngestionModalProps {
   isOpen: boolean;
@@ -111,10 +117,10 @@ export const LogIngestionModal: React.FC<LogIngestionModalProps> = ({
           rawText,
           taxonomy: project.taxonomy,
           existingContext: {
-            characters: project.characters,
-            factions: project.factions,
-            timelineEvents: project.timelineEvents,
-            wikiArticles: project.wikiArticles,
+            characters: project.characters.map((c) => compactCharacter(c, 80)),
+            factions: project.factions.map(compactFaction),
+            timelineEvents: project.timelineEvents.slice(-15).map(compactEvent),
+            wikiArticles: project.wikiArticles.slice(0, 20).map((a) => articleExcerpt(a, 120)),
           },
         }),
       });
@@ -145,8 +151,9 @@ export const LogIngestionModal: React.FC<LogIngestionModalProps> = ({
 
       const mergedEvents = [...project.timelineEvents];
       const freshEvents: TimelineEvent[] = [];
-      if (Array.isArray(data.events)) {
-        data.events.forEach((e: any) => {
+      const ingestedEvents = data.extractedEvents ?? data.events;
+      if (Array.isArray(ingestedEvents)) {
+        ingestedEvents.forEach((e: any) => {
           const withId: TimelineEvent = {
             ...e,
             id: e.id || `evt-${Date.now()}-${Math.random()}`,
@@ -457,11 +464,11 @@ export const LogIngestionModal: React.FC<LogIngestionModalProps> = ({
           playthroughTitle: project.title,
           taxonomy: project.taxonomy,
           existingContext: {
-            characters: project.characters,
-            factions: project.factions,
-            locations: project.locations,
-            relics: project.relics,
-            wikiArticles: project.wikiArticles,
+            characters: project.characters.map((c) => c.name),
+            factions: project.factions.map((f) => f.name),
+            locations: project.locations.map((l) => l.name),
+            relics: project.relics.map((r) => r.name),
+            wikiArticles: project.wikiArticles.slice(0, 40).map((a) => articleExcerpt(a, 100)),
           },
         }),
       });

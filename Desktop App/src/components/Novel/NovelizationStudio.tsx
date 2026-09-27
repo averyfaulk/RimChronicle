@@ -38,6 +38,7 @@ import { saveBlobToFolder } from "../../lib/desktopFs";
 import { extractCanonViolations, CanonViolation } from "../../lib/canonEngine";
 import { CanonConstraintManagerModal } from "./CanonConstraintManagerModal";
 import { getTaxonomy } from "../../lib/taxonomy";
+import { compactCharacter, compactEvent } from "../../lib/aiContext";
 
 interface NovelizationStudioProps {
   project: StoryProject;
@@ -284,8 +285,15 @@ export const NovelizationStudio: React.FC<NovelizationStudioProps> = ({
         body: JSON.stringify({
           chapterTitle: currentChapter.title,
           actTitle: currentAct.title,
-          selectedEvents: project.timelineEvents.slice(0, 6),
-          includedCharacters: project.characters,
+          selectedEvents: project.timelineEvents.slice(0, 6).map(compactEvent),
+          includedCharacters: project.characters
+            .filter((c) =>
+              project.timelineEvents
+                .slice(0, 6)
+                .some((e) => e.participants.some((p) => p.toLowerCase() === c.name.toLowerCase()))
+            )
+            .slice(0, 8)
+            .map((c) => compactCharacter(c)),
           stylePreset,
           customStyleInstructions: customStyleNotes,
           pointOfView,

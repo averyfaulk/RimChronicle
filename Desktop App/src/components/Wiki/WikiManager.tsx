@@ -41,6 +41,7 @@ import { CharacterSheetPanel } from "../Characters/CharacterSheetPanel";
 import { CharacterEditModal } from "../Characters/CharacterEditModal";
 import { downloadBlob } from "../../lib/zipExporter";
 import { saveBlobToFolder } from "../../lib/desktopFs";
+import { compactCharacter, compactEvent, compactFaction } from "../../lib/aiContext";
 
 interface WikiManagerProps {
   project: StoryProject;
@@ -532,9 +533,19 @@ export const WikiManager: React.FC<WikiManagerProps> = ({
           currentContent: currentArticle.markdownContent,
           promptInstruction: aiPromptInstruction || "Deepen historical lore, character trauma, and combat chronicles with cross-references.",
           context: {
-            characters: project.characters,
-            timelineEvents: project.timelineEvents,
-            factions: project.factions,
+            characters: project.characters
+              .filter((c) => currentArticle.title.toLowerCase().includes(c.name.toLowerCase()))
+              .slice(0, 5)
+              .map((c) => compactCharacter(c)),
+            timelineEvents: project.timelineEvents
+              .filter((e) => currentArticle.title.toLowerCase().includes(e.title.toLowerCase()) || currentArticle.markdownContent.includes(e.title))
+              .slice(-6)
+              .map(compactEvent),
+            factions: project.factions
+              .filter((f) => currentArticle.title.toLowerCase().includes(f.name.toLowerCase()))
+              .slice(0, 4)
+              .map(compactFaction),
+            wikiArticles: project.wikiArticles.map((a) => a.title),
           },
         }),
       });

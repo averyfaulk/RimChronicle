@@ -16,7 +16,15 @@ import {
 import { ThemeMode, StoryProject } from "../../types";
 import { EntityLookup } from "../../lib/wikiParser";
 import { MarkdownRenderer } from "../Wiki/MarkdownRenderer";
-import { getTaxonomy, taxonomyLabel } from "../../lib/taxonomy";
+import { getTaxonomy } from "../../lib/taxonomy";
+import {
+  getCachedCanonBlock,
+  retrieveMatchedArticles,
+  retrieveMatchedEntities,
+  retrieveRecentEvents,
+  filterRelationships,
+  buildChatTail,
+} from "../../lib/aiContext";
 
 interface ChroniclerBotProps {
   project: StoryProject;
@@ -73,23 +81,22 @@ export const ChroniclerBot: React.FC<ChroniclerBotProps> = ({
     setIsLoading(true);
 
     try {
+      // Token-frugal payload: only the wiki articles + entities relevant to this
+      // question, plus a stable canon block reused verbatim across the session.
+      const matchedArticles = retrieveMatchedArticles(userMsg.text, project);
+      const matchedEntities = retrieveMatchedEntities(userMsg.text, matchedArticles, project);
+
       const res = await aiFetch("/api/ai/ask-chronicler", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           query: userMsg.text,
-          context: {
-            title: project.title,
-            characters: project.characters,
-            factions: project.factions,
-            timelineEvents: project.timelineEvents,
-            relationships: project.relationships,
-            recentArticles: project.wikiArticles.map((a) => ({
-              title: a.title,
-              category: taxonomyLabel(getTaxonomy(project).articleCategories, a.category),
-              summary: a.markdownContent.slice(0, 150),
-            })),
-          },
+          canonBlock: getCachedCanonBlock(project),
+          matchedArticles,
+          matchedEntities,
+          recentEvents: retrieveRecentEvents(project, 4),
+          relationships: filterRelationships(project, matchedEntities),
+          chatTail: buildChatTail(messages, 3),
         }),
       });
 
