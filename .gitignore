@@ -1,2 +1,6 @@
 /assets
 /metadata.json
+
+.env
+.env.*
+!.env.example
