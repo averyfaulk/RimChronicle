@@ -36,7 +36,7 @@ export interface EventTemplate {
   id: string;
   name: string; // "Raid"
   icon?: string; // lucide icon key (see components/Timeline/TemplateIcon.tsx)
-  accent?: string; // color token: red/emerald/blue/amber/cyan/violet
+  accent?: string; // colour accent — red/emerald/blue/amber/cyan/violet
   category: string; // EventCategory id — customizable via project taxonomy
   threatLevel: ThreatLevel; // base level; may be overridden by a deriving slider
   titleTemplate: string; // "{{faction}} Raid on {{location}}"
