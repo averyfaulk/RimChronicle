@@ -131,7 +131,43 @@ app.whenReady().then(() => {
       fs.writeFileSync(target, typeof content === "string" ? content : String(content), "utf8");
       count++;
     }
-    return { ok: true, folder, count };
+
+    // Prune the app-owned mirror so files for articles, characters, and
+    // chapters that were deleted (or renamed/reparented) don't linger on disk.
+    // Only the directories/files the export owns are touched — anything under
+    // projects/ or unrelated user files is left alone.
+    const written = new Set(Object.keys(files).map((p) => String(p).replace(/^\/+/, "")));
+    const ownedDirs = ["wiki", "characters", "novel"];
+    const ownedRootFiles = ["README.md", "TIMELINE.md"];
+    let pruned = 0;
+    const pruneDir = (rel) => {
+      const abs = path.join(folder, rel);
+      if (!fs.existsSync(abs) || !fs.statSync(abs).isDirectory()) return;
+      for (const entry of fs.readdirSync(abs)) {
+        const childAbs = path.join(abs, entry);
+        const stat = fs.statSync(childAbs);
+        const childRel = `${rel}/${entry}`;
+        if (stat.isDirectory()) {
+          pruneDir(childRel);
+        } else if (stat.isFile() && !written.has(childRel)) {
+          const target = safeJoin(folder, childRel);
+          if (target) {
+            fs.unlinkSync(target);
+            pruned++;
+          }
+        }
+      }
+    };
+    ownedDirs.forEach(pruneDir);
+    for (const name of ownedRootFiles) {
+      if (written.has(name)) continue;
+      const target = safeJoin(folder, name);
+      if (target && fs.existsSync(target) && fs.statSync(target).isFile()) {
+        fs.unlinkSync(target);
+        pruned++;
+      }
+    }
+    return { ok: true, folder, count, pruned };
   });
 
   // List project .json files inside the chosen wiki folder. Returns an array
